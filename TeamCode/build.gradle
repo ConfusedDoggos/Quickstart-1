@@ -15,6 +15,15 @@
 apply from: '../build.common.gradle'
 apply from: '../build.dependencies.gradle'
 
+repositories {
+    maven {
+        url "https://repo.dairy.foundation/releases"
+    }
+    maven {
+        url "https://repo.dairy.foundation/snapshots"
+    }
+}
+
 android {
     namespace = 'org.firstinspires.ftc.teamcode'
 
@@ -23,6 +32,9 @@ android {
     }
 }
 
+
 dependencies {
+    implementation "org.solverslib:core:SNAPSHOT-7cdcc66"
+    implementation "org.solverslib:pedroPathing:SNAPSHOT-7cdcc66"
     implementation project(':FtcRobotController')
 }
