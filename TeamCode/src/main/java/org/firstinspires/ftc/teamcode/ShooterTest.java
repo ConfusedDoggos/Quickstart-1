@@ -12,11 +12,11 @@ import com.seattlesolvers.solverslib.hardware.motors.MotorEx;
 
 @TeleOp(name = "ShootAS",group = "AS")
 public class ShooterTest extends OpMode {
-    MotorEx shooter = new MotorEx(hardwareMap, "shooter1", Motor.GoBILDA.BARE);
-    DcMotor shooter1 = shooter.motorEx;
+    public MotorEx shooter;
+    //DcMotor shooter1 = shooter.motorEx;
     @Override
     public void init() {
-
+        shooter = new MotorEx(hardwareMap,"shooter1", Motor.GoBILDA.BARE);
     }
 
     /** This initializes the PoseUpdater, the mecanum drive motors, and the Panels telemetry. */
@@ -26,8 +26,6 @@ public class ShooterTest extends OpMode {
 
     @Override
     public void start() {
-        follower.startTeleopDrive();
-        follower.update();
         if (gamepad1.a) {
             shooter.set(0.5);
         }
