@@ -14,6 +14,13 @@ public class ShooterTest extends OpMode {
     private MotorEx fL, fR, bL, bR;
     private MecanumDrive drive;
     private GamepadEx driverOp;
+    public static double kp = 0.05;
+    public static double ki = 0.01;
+    public static double kd = 0.31;
+    public static double ks = 0.01;
+    public static double kv = 0.31;
+    public double speed;
+
     @Override
     public void init() {
         shooter = new MotorEx(hardwareMap,"shooterMotor", Motor.GoBILDA.BARE);
@@ -24,6 +31,9 @@ public class ShooterTest extends OpMode {
         bR = new MotorEx(hardwareMap,"bR",Motor.GoBILDA.RPM_312);
         drive = new MecanumDrive(fL, fR, bL, bR);
         driverOp = new GamepadEx(gamepad1);
+        /*shooter.setRunMode(Motor.RunMode.VelocityControl);
+        shooter.setVeloCoefficients(kp,ki,kd);
+        shooter.setFeedforwardCoefficients();*/
     }
 
     @Override
@@ -41,10 +51,15 @@ public class ShooterTest extends OpMode {
      */
     @Override
     public void loop() {
+        if (gamepad1.right_bumper) {
+            speed = 0.5;
+        } else {
+            speed = 1;
+        }
         drive.driveRobotCentric(
-                -driverOp.getLeftX(),
-                -driverOp.getLeftY(),
-                -driverOp.getRightX()
+                -driverOp.getLeftX() * speed,
+                -driverOp.getLeftY() * speed,
+                -driverOp.getRightX() * speed
         );
         if (gamepad1.a) {
             shooter.set(0.5);
