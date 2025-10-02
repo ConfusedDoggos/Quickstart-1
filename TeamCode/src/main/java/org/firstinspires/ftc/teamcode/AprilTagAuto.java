@@ -27,11 +27,15 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package org.firstinspires.ftc.robotcontroller.external.samples;
+package org.firstinspires.ftc.teamcode;
 
-import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
+import com.qualcomm.robotcore.hardware.DcMotor;
+import com.seattlesolvers.solverslib.drivebase.MecanumDrive;
+import com.seattlesolvers.solverslib.gamepad.GamepadEx;
+import com.seattlesolvers.solverslib.hardware.motors.Motor;
+import com.seattlesolvers.solverslib.hardware.motors.MotorEx;
 
 import org.firstinspires.ftc.robotcore.external.hardware.camera.BuiltinCameraDirection;
 import org.firstinspires.ftc.robotcore.external.hardware.camera.WebcamName;
@@ -41,8 +45,9 @@ import org.firstinspires.ftc.robotcore.external.navigation.Position;
 import org.firstinspires.ftc.robotcore.external.navigation.YawPitchRollAngles;
 import org.firstinspires.ftc.vision.VisionPortal;
 import org.firstinspires.ftc.vision.apriltag.AprilTagDetection;
-import org.firstinspires.ftc.vision.apriltag.AprilTagProcessor;
 import org.firstinspires.ftc.vision.apriltag.AprilTagGameDatabase;
+import org.firstinspires.ftc.vision.apriltag.AprilTagProcessor;
+
 
 
 import java.util.List;
@@ -66,11 +71,37 @@ import java.util.List;
  * Use Android Studio to Copy this Class, and Paste it into your team's code folder with a new name.
  * Remove or comment out the @Disabled line to add this OpMode to the Driver Station OpMode list.
  */
-@TeleOp(name = "Concept: AprilTag Localization", group = "Concept")
+@TeleOp(name = "Cracking Jeremy In Order to Autonomously Move a Robot", group = "TeamCode")
 //@Disabled
-public class ConceptAprilTagLocalization extends LinearOpMode {
+public class AprilTagAuto extends LinearOpMode {
 
     private static final boolean USE_WEBCAM = true;  // true for webcam, false for phone camera
+
+    public MotorEx shooter, intake;
+    private MotorEx fL, fR, bL, bR;
+    private MecanumDrive drive;
+    private GamepadEx driverOp;
+    public static double kp = 0.05;
+    public static double ki = 0.01;
+    public static double kd = 0.31;
+    public static double ks = 0.01;
+    public static double kv = 0.31;
+    public double speed;
+
+    @Override
+    public void init() {
+        shooter = new MotorEx(hardwareMap,"shooterMotor", Motor.GoBILDA.BARE);
+        intake = new MotorEx(hardwareMap,"intakeMotor", Motor.GoBILDA.RPM_435);
+        fL = new MotorEx(hardwareMap,"fL",Motor.GoBILDA.RPM_312);
+        fR = new MotorEx(hardwareMap,"fR",Motor.GoBILDA.RPM_312);
+        bL = new MotorEx(hardwareMap,"bL",Motor.GoBILDA.RPM_312);
+        bR = new MotorEx(hardwareMap,"bR",Motor.GoBILDA.RPM_312);
+        drive = new MecanumDrive(fL, fR, bL, bR);
+        driverOp = new GamepadEx(gamepad1);
+        /*shooter.setRunMode(Motor.RunMode.VelocityControl);
+        shooter.setVeloCoefficients(kp,ki,kd);
+        shooter.setFeedforwardCoefficients();*/
+    }
 
     /**
      * Variables to store the position and orientation of the camera on the robot. Setting these
@@ -158,7 +189,7 @@ public class ConceptAprilTagLocalization extends LinearOpMode {
                 .setDrawCubeProjection(true)
                 .setDrawTagOutline(true)
                 .setTagFamily(AprilTagProcessor.TagFamily.TAG_36h11)
-                .setTagLibrary(AprilTagGameDatabase.getCenterStageTagLibrary())
+                .setTagLibrary(AprilTagGameDatabase.getDecodeTagLibrary())
                 .setOutputUnits(DistanceUnit.INCH, AngleUnit.DEGREES)
                 .setCameraPose(cameraPosition, cameraOrientation)
 
@@ -237,6 +268,10 @@ public class ConceptAprilTagLocalization extends LinearOpMode {
                             detection.robotPose.getOrientation().getPitch(AngleUnit.DEGREES),
                             detection.robotPose.getOrientation().getRoll(AngleUnit.DEGREES),
                             detection.robotPose.getOrientation().getYaw(AngleUnit.DEGREES)));
+
+                    if (detection.robotPose.getPosition().x < 30) {
+                        fL.setPower(-1);
+                    }
                 }
                 else {
                     telemetry.addLine(String.format(("Obelisk AprilTag, Localization not enabled.")));
