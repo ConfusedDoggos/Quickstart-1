@@ -39,6 +39,7 @@ import com.seattlesolvers.solverslib.drivebase.MecanumDrive;
 import com.seattlesolvers.solverslib.gamepad.GamepadEx;
 import com.seattlesolvers.solverslib.hardware.motors.Motor;
 import com.seattlesolvers.solverslib.hardware.motors.MotorEx;
+import com.seattlesolvers.solverslib.hardware.motors.MotorGroup;
 
 import org.firstinspires.ftc.robotcore.external.hardware.camera.BuiltinCameraDirection;
 import org.firstinspires.ftc.robotcore.external.hardware.camera.WebcamName;
@@ -89,6 +90,8 @@ public class v1_teleop extends LinearOpMode {
     private AprilTagProcessor aprilTag;
 
     private MotorEx fL, fR, bL, bR;
+    private MotorEx launcher1, launcher2;
+    private MotorGroup launcherMotors;
     private MecanumDrive drive;
     private GamepadEx driverOp;
     public MotorEx shooter;
@@ -128,6 +131,7 @@ public class v1_teleop extends LinearOpMode {
                 } else if (gamepad1.dpad_up) {
                     visionPortal.resumeStreaming();
                 }
+                launcherMotors.set(gamepad2.left_stick_x);
 
                 // Share the CPU.
                 sleep(20);
@@ -149,6 +153,10 @@ public class v1_teleop extends LinearOpMode {
         bL = new MotorEx(hardwareMap,"bL",Motor.GoBILDA.RPM_312);
         bR = new MotorEx(hardwareMap,"bR",Motor.GoBILDA.RPM_312);
         shooter = new MotorEx(hardwareMap,"intakeMotor", Motor.GoBILDA.RPM_435);
+        launcher1 = new MotorEx(hardwareMap,"shooterMotor1", Motor.GoBILDA.BARE);
+        launcher2 = new MotorEx(hardwareMap,"shooterMotor2", Motor.GoBILDA.BARE);
+        launcher2.setInverted(true);
+        launcherMotors = new MotorGroup(launcher1,launcher2);
         drive = new MecanumDrive(fL, fR, bL, bR);
         driverOp = new GamepadEx(gamepad1);
 
