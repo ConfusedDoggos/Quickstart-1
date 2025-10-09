@@ -81,6 +81,7 @@ public class AprilTagSimpleAuto extends LinearOpMode {
     private static final boolean USE_WEBCAM = true;  // true for webcam, false for phone camera
     public static int deadzone = 30;
     public static double speed = .5;
+    public static double minTurnSpeed = 0.3;
     /**
      * The variable to store our instance of the AprilTag processor.
      */
@@ -250,12 +251,14 @@ public class AprilTagSimpleAuto extends LinearOpMode {
 
             // Step through the list of detections and display info for each one.
             for (AprilTagDetection detection : currentDetections) {
-                if(detection.id == 20) {
+                if(detection.id == 20 || detection.id == 24) {
                     if (detection.center.x - 320 < -deadzone || detection.center.x - 320 > deadzone) {
-
                         cmd_vel[0] = -driverOp.getLeftX() * 0.5;
                         cmd_vel[1] = -driverOp.getLeftY() * 0.5;
                         cmd_vel[2] = ((detection.center.x - 320) / 320) * -speed;
+                        if (cmd_vel[2] < minTurnSpeed) {
+                            cmd_vel[2] = minTurnSpeed;
+                        }
                     }
                     else {
                         cmd_vel[0] = -driverOp.getLeftX() * 0.5;

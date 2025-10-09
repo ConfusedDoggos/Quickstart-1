@@ -32,6 +32,12 @@ package org.firstinspires.ftc.teamcode;
 import android.util.Size;
 
 import com.bylazar.configurables.annotations.Configurable;
+import com.bylazar.configurables.annotations.IgnoreConfigurable;
+import com.bylazar.graph.GraphManager;
+import com.bylazar.graph.PanelsGraph;
+import com.bylazar.telemetry.PanelsTelemetry;
+import com.bylazar.telemetry.TelemetryManager;
+import com.bylazar.utils.LoopTimer;
 import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
@@ -84,6 +90,12 @@ public class v1_teleop extends LinearOpMode {
     public static int deadzone = 30;
     public static double speed = .5;
     public static double shooterRPM = 450;
+    public static boolean shooterTelemetry = true;
+
+    @IgnoreConfigurable
+    static TelemetryManager telemetryM;
+    static GraphManager graphM;
+
     /**
      * The variable to store our instance of the AprilTag processor.
      */
@@ -106,7 +118,9 @@ public class v1_teleop extends LinearOpMode {
 
     @Override
     public void runOpMode() {
-
+        telemetryM = PanelsTelemetry.INSTANCE.getTelemetry();
+        graphM = PanelsGraph.INSTANCE.getManager();
+        LoopTimer timer = new LoopTimer();
         initAprilTag();
         initMotors();
 
@@ -118,23 +132,30 @@ public class v1_teleop extends LinearOpMode {
 
         if (opModeIsActive()) {
             while (opModeIsActive()) {
-
-                telemetryAprilTag();
-                updateMotorVel();
+                timer.start();
+                //telemetryAprilTag();
+                // updateMotorVel();
 
                 // Push telemetry to the Driver Station.
                 telemetry.update();
-
+                visionPortal.stopStreaming();
                 // Save CPU resources; can resume streaming when needed.
                 if (gamepad1.dpad_down) {
                     visionPortal.stopStreaming();
                 } else if (gamepad1.dpad_up) {
                     visionPortal.resumeStreaming();
                 }
-                launcherMotors.set(gamepad2.left_stick_x);
-
+                shooterTeleOp();
+                if (Math.abs(gamepad2.left_stick_x) > 0.1) {
+                    launcherMotors.set(gamepad2.left_stick_x);
+                }
+                graphM.addData("Launcher",launcherMotors.getVelocity());
+                graphM.update();
+                telemetryM.debug("Launcher Velocity",launcherMotors.getVelocity());
+                telemetryM.update(telemetry);
+                timer.end();
                 // Share the CPU.
-                sleep(20);
+//                sleep(20);
             }
         }
 
@@ -287,6 +308,12 @@ public class v1_teleop extends LinearOpMode {
                         cmd_vel[0] = -driverOp.getLeftX() * 0.5;
                         cmd_vel[1] = -driverOp.getLeftY() * 0.5;
                         cmd_vel[2] = ((detection.center.x - 320) / 320) * -speed;
+                        if (cmd_vel[2] < 0.4 && cmd_vel[2] > 0) {
+                            cmd_vel[2] = 0.4;
+                        }
+                        if (cmd_vel[2] > -0.4 && cmd_vel[2] < 0) {
+                            cmd_vel[2] = -0.4;
+                        }
                         deactivateBallLauncher();
                     }
                     else {
@@ -312,14 +339,25 @@ public class v1_teleop extends LinearOpMode {
         );
     }
 
+    private void shooterTeleOp() {
+        if (gamepad2.a) {
+            activateBallLauncher();
+        } else {
+            deactivateBallLauncher();
+        }
+        if (shooterTelemetry) {
+
+        }
+    }
+
     private void activateBallLauncher() {
-        shooter.setVelocity(toRadPerSec(shooterRPM));
+        //launcherMotors.setVelocity(toTicksPerSec(shooterRPM));
+        launcherMotors.set(1);
     }
     private void deactivateBallLauncher() {
-        shooter.setVelocity(0);
-        shooter.stopMotor();
+        launcherMotors.set(0);
     }
-    private double toRadPerSec(double input) {
+    private double toTicksPerSec(double input) {
         double output = (input/60) * 384.5;
         return output;
     }
