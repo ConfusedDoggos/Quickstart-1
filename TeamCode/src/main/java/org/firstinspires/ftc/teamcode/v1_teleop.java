@@ -91,16 +91,16 @@ public class v1_teleop extends LinearOpMode {
     public static double speed = .5;
     public static double shooterSpeed = 1;
     public static double shooterRPM = 450;
-    public static boolean shooterTelemetry = true;
+    double constant = 0.0;
 
-    public static double kp = 0.05;
-    public static double ki = 0.01;
-    public static double kd = 0.31;
+    public static double kp = 1;
+    public static double ki = 0;
+    public static double kd = 0;
 
-    public static double ks = 0.92;
-    public static double kv = 0.47;
+    public static double ks = 0;
+    public static double kv = 0.1;
 
-    public static double ka = 0.14;
+    public static double ka = 0;
 
     @IgnoreConfigurable
     static TelemetryManager telemetryM;
@@ -138,32 +138,43 @@ public class v1_teleop extends LinearOpMode {
         telemetry.addData("DS preview on/off", "3 dots, Camera Stream");
         telemetry.addData(">", "Touch START to start OpMode");
         telemetry.update();
+        List<LynxModule> hubs = hardwareMap.getAll(LynxModule.class);
+        hubs.forEach(hub -> hub.setBulkCachingMode(LynxModule.BulkCachingMode.MANUAL));
         waitForStart();
-
         if (opModeIsActive()) {
             while (opModeIsActive()) {
+                hubs.forEach(LynxModule::clearBulkCache);
                 timer.start();
-                //telemetryAprilTag();
-                updateMotorVel();
-                 // Push telemetry to the Driver Station.
-                telemetry.update();
-                visionPortal.stopStreaming();
-                // Save CPU resources; can resume streaming when needed.
-                if (gamepad1.dpad_down) {
+
+                //Apriltag seeking/shooting mode
+                if (gamepad1.leftBumper) {
+                    visionPortal.startStreaming();
+                    telemetryAprilTag();
+                } else {
                     visionPortal.stopStreaming();
-                } else if (gamepad1.dpad_up) {
-                    visionPortal.resumeStreaming();
                 }
+                //Drive input based on gamepad + apriltag data
+                updateMotorVel();
+               
+                //Check gamepad to activate laauncher if commanded
                 shooterTeleOp();
-                if (Math.abs(gamepad2.left_stick_x) > 0.1) {
-                    launcherMotors.set(gamepad2.left_stick_x);
-                }
-                graphM.addData("Launcher",launcherMotors.getVelocity());
-                graphM.update();
+
+                //Attempt at updating graph for FTCControl Panels
+                List<Double> velocities = launcherMotors.getVelocities();
+                telemetryM.debug("Left Flywheel Velocity", velocities.get(0));
+                telemetryM.debug("Right Flywheel Velocity", velocities.get(1));
                 telemetryM.debug("Launcher Velocity",launcherMotors.getVelocity());
+                telemetryM.debug("Constant:",constant);
+                panelsTelemetry.debug("LoopTime:", timer.ms / timer.hz)
+                graphM.addData("Launcher Total Velocity",launcherMotors.getVelocity());
+                graphM.addData("Left FLywheel Velo",velocities.get(0));
+                graphM.addData("Righ FLywheel Velo",velocities.get(1));
+                graphM.addData("Constant:",constant);
+                graphM.update();
                 telemetryM.update(telemetry);
                 timer.end();
                 // Share the CPU.
+                
 //                sleep(20);
             }
         }
@@ -191,24 +202,110 @@ public class v1_teleop extends LinearOpMode {
         driverOp = new GamepadEx(gamepad1);
 
         launcherMotors.setRunMode(Motor.RunMode.VelocityControl);
-
         launcherMotors.setVeloCoefficients(kp, ki, kd);
-        double[] coeffs = launcherMotors.getVeloCoefficients();
-        double kP = coeffs[0];
-        double kI = coeffs[1];
-        double kD = coeffs[2];
-
-// set and get the feedforward coefficients
         launcherMotors.setFeedforwardCoefficients(ks, kv);
-        double[] ffCoeffs = launcherMotors.getFeedforwardCoefficients();
-        double kS = ffCoeffs[0];
-        double kV = ffCoeffs[1];
-
-        launcherMotors.setFeedforwardCoefficients(ks, kv, ka);
-        ffCoeffs = launcherMotors.getFeedforwardCoefficients();
-        double kA = ffCoeffs[2];
+    
     }
-    private void initAprilTag() {
+
+
+
+    /**
+     * Add telemetry about AprilTag detections.
+     */
+    private void telemetryAprilTag() {
+
+        List<AprilTagDetection> currentDetections = aprilTag.getDetections();
+        telemetry.addData("# AprilTags Detected", currentDetections.size());
+
+        // Step through the list of detections and display info for each one.
+        for (AprilTagDetection detection : currentDetections) {
+            if (detection.metadata != null) {
+                telemetry.addLine(String.format("\n==== (ID %d) %s", detection.id, detection.metadata.name));
+                telemetry.addLine(String.format("XYZ %6.1f %6.1f %6.1f  (inch)", detection.ftcPose.x, detection.ftcPose.y, detection.ftcPose.z));
+                telemetry.addLine(String.format("PRY %6.1f %6.1f %6.1f  (deg)", detection.ftcPose.pitch, detection.ftcPose.roll, detection.ftcPose.yaw));
+                telemetry.addLine(String.format("RBE %6.1f %6.1f %6.1f  (inch, deg, deg)", detection.ftcPose.range, detection.ftcPose.bearing, detection.ftcPose.elevation));
+            } else {
+                telemetry.addLine(String.format("\n==== (ID %d) Unknown", detection.id));
+                telemetry.addLine(String.format("Center %6.0f %6.0f   (pixels)", detection.center.x, detection.center.y));
+            }
+        }   // end for() loop
+        aprilTag.getDetections();
+
+        // Add "key" information to telemetry
+        telemetry.addLine("\nkey:\nXYZ = X (Right), Y (Forward), Z (Up) dist.");
+        telemetry.addLine("PRY = Pitch, Roll & Yaw (XYZ Rotation)");
+        telemetry.addLine("RBE = Range, Bearing & Elevation");
+        telemetry.update();
+
+    }   // end method telemetryAprilTag()
+
+    private void updateMotorVel() {
+        if (!aprilTag.getDetections().isEmpty()) {
+            List<AprilTagDetection> currentDetections = aprilTag.getDetections();
+            telemetry.addData("# AprilTags Detected", currentDetections.size());
+
+            // Step through the list of detections and display info for each one.
+            for (AprilTagDetection detection : currentDetections) {
+                if(detection.id == 20) {
+                    if (detection.center.x - 320 < -deadzone || detection.center.x - 320 > deadzone) {
+
+                        cmd_vel[0] = -driverOp.getLeftX() * 0.5;
+                        cmd_vel[1] = -driverOp.getLeftY() * 0.5;
+                        cmd_vel[2] = ((detection.center.x - 320) / 320) * -speed;
+                        if (cmd_vel[2] < 0.4 && cmd_vel[2] > 0) {
+                            cmd_vel[2] = 0.4;
+                        }
+                        if (cmd_vel[2] > -0.4 && cmd_vel[2] < 0) {
+                            cmd_vel[2] = -0.4;
+                        }
+                        deactivateBallLauncher();
+                    }
+                    else {
+                        cmd_vel[0] = -driverOp.getLeftX() * 0.5;
+                        cmd_vel[1] = -driverOp.getLeftY() * 0.5;
+                        cmd_vel[2] = 0;
+                        activateBallLauncher();
+                    }
+                }
+                else {
+                    deactivateBallLauncher();
+                }
+            }   // end for() loop
+
+        }
+        else {
+            cmd_vel[0] = -driverOp.getLeftX() * 0.5;
+            cmd_vel[1] = -driverOp.getLeftY() * 0.5;
+            cmd_vel[2] = -driverOp.getRightX() * 0.5;
+            deactivateBallLauncher();
+        }
+        drive.driveRobotCentric(
+                cmd_vel[0],
+                cmd_vel[1],
+                cmd_vel[2]
+        );
+    }
+
+    private void shooterTeleOp() {
+        if (gamepad2.a) {
+            activateBallLauncher();
+        } else if (gampead2.b) {
+            deactivateBallLauncher();
+        }
+        if (Math.abs(gamepad2.left_stick_x) > 0.1) {
+                    launcherMotors.set(gamepad2.left_stick_x);
+        }
+    }
+
+    private void activateBallLauncher() {
+        launcherMotors.set(shooterSpeed);
+    }
+    private void deactivateBallLauncher() {
+        launcherMotors.stopMotor();
+    }
+
+
+        private void initAprilTag() {
 
         // Create the AprilTag processor.
         aprilTag = new AprilTagProcessor.Builder()
@@ -272,103 +369,4 @@ public class v1_teleop extends LinearOpMode {
         //visionPortal.setProcessorEnabled(aprilTag, true);
 
     }   // end method initAprilTag()
-
-
-    /**
-     * Add telemetry about AprilTag detections.
-     */
-    private void telemetryAprilTag() {
-
-        List<AprilTagDetection> currentDetections = aprilTag.getDetections();
-        telemetry.addData("# AprilTags Detected", currentDetections.size());
-
-        // Step through the list of detections and display info for each one.
-        for (AprilTagDetection detection : currentDetections) {
-            if (detection.metadata != null) {
-                telemetry.addLine(String.format("\n==== (ID %d) %s", detection.id, detection.metadata.name));
-                telemetry.addLine(String.format("XYZ %6.1f %6.1f %6.1f  (inch)", detection.ftcPose.x, detection.ftcPose.y, detection.ftcPose.z));
-                telemetry.addLine(String.format("PRY %6.1f %6.1f %6.1f  (deg)", detection.ftcPose.pitch, detection.ftcPose.roll, detection.ftcPose.yaw));
-                telemetry.addLine(String.format("RBE %6.1f %6.1f %6.1f  (inch, deg, deg)", detection.ftcPose.range, detection.ftcPose.bearing, detection.ftcPose.elevation));
-            } else {
-                telemetry.addLine(String.format("\n==== (ID %d) Unknown", detection.id));
-                telemetry.addLine(String.format("Center %6.0f %6.0f   (pixels)", detection.center.x, detection.center.y));
-            }
-        }   // end for() loop
-        aprilTag.getDetections();
-
-        // Add "key" information to telemetry
-        telemetry.addLine("\nkey:\nXYZ = X (Right), Y (Forward), Z (Up) dist.");
-        telemetry.addLine("PRY = Pitch, Roll & Yaw (XYZ Rotation)");
-        telemetry.addLine("RBE = Range, Bearing & Elevation");
-        telemetry.update();
-
-    }   // end method telemetryAprilTag()
-
-    private void updateMotorVel() {
-        if (!aprilTag.getDetections().isEmpty()) {
-            List<AprilTagDetection> currentDetections = aprilTag.getDetections();
-            telemetry.addData("# AprilTags Detected", currentDetections.size());
-
-            // Step through the list of detections and display info for each one.
-            for (AprilTagDetection detection : currentDetections) {
-                if(detection.id == 20) {
-                    if (detection.center.x - 320 < -deadzone || detection.center.x - 320 > deadzone) {
-
-                        cmd_vel[0] = -driverOp.getLeftX() * 0.5;
-                        cmd_vel[1] = -driverOp.getLeftY() * 0.5;
-                        cmd_vel[2] = ((detection.center.x - 320) / 320) * -speed;
-                        if (cmd_vel[2] < 0.4 && cmd_vel[2] > 0) {
-                            cmd_vel[2] = 0.4;
-                        }
-                        if (cmd_vel[2] > -0.4 && cmd_vel[2] < 0) {
-                            cmd_vel[2] = -0.4;
-                        }
-                        deactivateBallLauncher();
-                    }
-                    else {
-                        cmd_vel[0] = -driverOp.getLeftX() * 0.5;
-                        cmd_vel[1] = -driverOp.getLeftY() * 0.5;
-                        cmd_vel[2] = 0;
-                        activateBallLauncher();
-                    }
-                }
-            }   // end for() loop
-
-        }
-        else {
-            cmd_vel[0] = -driverOp.getLeftX() * 0.5;
-            cmd_vel[1] = -driverOp.getLeftY() * 0.5;
-            cmd_vel[2] = -driverOp.getRightX() * 0.5;
-            deactivateBallLauncher();
-        }
-        drive.driveRobotCentric(
-                cmd_vel[0],
-                cmd_vel[1],
-                cmd_vel[2]
-        );
-    }
-
-    private void shooterTeleOp() {
-        if (gamepad2.a) {
-            activateBallLauncher();
-        } else {
-            deactivateBallLauncher();
-        }
-        if (shooterTelemetry) {
-
-        }
-    }
-
-    private void activateBallLauncher() {
-        //launcherMotors.setVelocity(toTicksPerSec(shooterRPM));
-        launcherMotors.set(shooterSpeed);
-    }
-    private void deactivateBallLauncher() {
-        launcherMotors.set(0);
-    }
-    private double toTicksPerSec(double input) {
-        double output = (input/60) * 384.5;
-        return output;
-    }
-
 }   // end class
