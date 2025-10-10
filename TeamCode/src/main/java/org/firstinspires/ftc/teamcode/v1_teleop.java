@@ -89,8 +89,18 @@ public class v1_teleop extends LinearOpMode {
     private static final boolean USE_WEBCAM = true;  // true for webcam, false for phone camera
     public static int deadzone = 30;
     public static double speed = .5;
+    public static double shooterSpeed = 1;
     public static double shooterRPM = 450;
     public static boolean shooterTelemetry = true;
+
+    public static double kp = 0.05;
+    public static double ki = 0.01;
+    public static double kd = 0.31;
+
+    public static double ks = 0.92;
+    public static double kv = 0.47;
+
+    public static double ka = 0.14;
 
     @IgnoreConfigurable
     static TelemetryManager telemetryM;
@@ -134,9 +144,8 @@ public class v1_teleop extends LinearOpMode {
             while (opModeIsActive()) {
                 timer.start();
                 //telemetryAprilTag();
-                // updateMotorVel();
-
-                // Push telemetry to the Driver Station.
+                updateMotorVel();
+                 // Push telemetry to the Driver Station.
                 telemetry.update();
                 visionPortal.stopStreaming();
                 // Save CPU resources; can resume streaming when needed.
@@ -181,22 +190,22 @@ public class v1_teleop extends LinearOpMode {
         drive = new MecanumDrive(fL, fR, bL, bR);
         driverOp = new GamepadEx(gamepad1);
 
-        shooter.setRunMode(Motor.RunMode.VelocityControl);
+        launcherMotors.setRunMode(Motor.RunMode.VelocityControl);
 
-        shooter.setVeloCoefficients(0.05, 0.01, 0.31);
-        double[] coeffs = shooter.getVeloCoefficients();
+        launcherMotors.setVeloCoefficients(kp, ki, kd);
+        double[] coeffs = launcherMotors.getVeloCoefficients();
         double kP = coeffs[0];
         double kI = coeffs[1];
         double kD = coeffs[2];
 
 // set and get the feedforward coefficients
-        shooter.setFeedforwardCoefficients(0.92, 0.47);
-        double[] ffCoeffs = shooter.getFeedforwardCoefficients();
+        launcherMotors.setFeedforwardCoefficients(ks, kv);
+        double[] ffCoeffs = launcherMotors.getFeedforwardCoefficients();
         double kS = ffCoeffs[0];
         double kV = ffCoeffs[1];
 
-        shooter.setFeedforwardCoefficients(0.92, 1.2, 0.3);
-        ffCoeffs = shooter.getFeedforwardCoefficients();
+        launcherMotors.setFeedforwardCoefficients(ks, kv, ka);
+        ffCoeffs = launcherMotors.getFeedforwardCoefficients();
         double kA = ffCoeffs[2];
     }
     private void initAprilTag() {
@@ -352,7 +361,7 @@ public class v1_teleop extends LinearOpMode {
 
     private void activateBallLauncher() {
         //launcherMotors.setVelocity(toTicksPerSec(shooterRPM));
-        launcherMotors.set(1);
+        launcherMotors.set(shooterSpeed);
     }
     private void deactivateBallLauncher() {
         launcherMotors.set(0);
