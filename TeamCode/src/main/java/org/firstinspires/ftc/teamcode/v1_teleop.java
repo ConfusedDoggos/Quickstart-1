@@ -38,6 +38,7 @@ import com.bylazar.graph.PanelsGraph;
 import com.bylazar.telemetry.PanelsTelemetry;
 import com.bylazar.telemetry.TelemetryManager;
 import com.bylazar.utils.LoopTimer;
+import com.qualcomm.hardware.lynx.LynxModule;
 import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
@@ -147,8 +148,8 @@ public class v1_teleop extends LinearOpMode {
                 timer.start();
 
                 //Apriltag seeking/shooting mode
-                if (gamepad1.leftBumper) {
-                    visionPortal.startStreaming();
+                if (gamepad1.left_bumper) {
+                    visionPortal.resumeStreaming();
                     telemetryAprilTag();
                 } else {
                     visionPortal.stopStreaming();
@@ -165,11 +166,12 @@ public class v1_teleop extends LinearOpMode {
                 telemetryM.debug("Right Flywheel Velocity", velocities.get(1));
                 telemetryM.debug("Launcher Velocity",launcherMotors.getVelocity());
                 telemetryM.debug("Constant:",constant);
-                panelsTelemetry.debug("LoopTime:", timer.ms / timer.hz)
+                telemetryM.debug("LoopTime:", timer.getMs() / timer.getHz());
                 graphM.addData("Launcher Total Velocity",launcherMotors.getVelocity());
                 graphM.addData("Left FLywheel Velo",velocities.get(0));
                 graphM.addData("Righ FLywheel Velo",velocities.get(1));
                 graphM.addData("Constant:",constant);
+                graphM.addData("LoopTime:", timer.getMs() / timer.getHz());
                 graphM.update();
                 telemetryM.update(telemetry);
                 timer.end();
@@ -289,7 +291,7 @@ public class v1_teleop extends LinearOpMode {
     private void shooterTeleOp() {
         if (gamepad2.a) {
             activateBallLauncher();
-        } else if (gampead2.b) {
+        } else if (gamepad2.b) {
             deactivateBallLauncher();
         }
         if (Math.abs(gamepad2.left_stick_x) > 0.1) {
