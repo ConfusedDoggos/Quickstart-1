@@ -33,8 +33,6 @@ import android.util.Size;
 
 import com.bylazar.configurables.annotations.Configurable;
 import com.bylazar.configurables.annotations.IgnoreConfigurable;
-import com.bylazar.graph.GraphManager;
-import com.bylazar.graph.PanelsGraph;
 import com.bylazar.telemetry.PanelsTelemetry;
 import com.bylazar.telemetry.TelemetryManager;
 import com.bylazar.utils.LoopTimer;
@@ -43,7 +41,9 @@ import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.seattlesolvers.solverslib.drivebase.MecanumDrive;
+import com.seattlesolvers.solverslib.gamepad.ButtonReader;
 import com.seattlesolvers.solverslib.gamepad.GamepadEx;
+import com.seattlesolvers.solverslib.gamepad.GamepadKeys;
 import com.seattlesolvers.solverslib.hardware.motors.Motor;
 import com.seattlesolvers.solverslib.hardware.motors.MotorEx;
 import com.seattlesolvers.solverslib.hardware.motors.MotorGroup;
@@ -54,6 +54,7 @@ import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.vision.VisionPortal;
 import org.firstinspires.ftc.vision.apriltag.AprilTagDetection;
 import org.firstinspires.ftc.vision.apriltag.AprilTagProcessor;
+import org.opencv.core.Point;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -90,8 +91,12 @@ public class v1_teleop extends LinearOpMode {
     private static final boolean USE_WEBCAM = true;  // true for webcam, false for phone camera
     public static int deadzone = 30;
     public static double speed = .5;
-    public static double shooterSpeed = 1;
+    public static double shooterSpeed = 0.75;
     public static double shooterRPM = 450;
+    public static double dtSpeedNormal = 1.0;
+    public static double dtSpeedSlow = 0.5;
+    public static double intakeSpeed = 0.9;
+    public static double intakeRejectSpeed = 0.3;
     double constant = 0.0;
 
     public static double kp = 1;
@@ -103,9 +108,11 @@ public class v1_teleop extends LinearOpMode {
 
     public static double ka = 0;
 
+    public static double aprilTagArea;
+    public static double screenPercentage;
+
     @IgnoreConfigurable
     static TelemetryManager telemetryM;
-    static GraphManager graphM;
 
     /**
      * The variable to store our instance of the AprilTag processor.
@@ -113,12 +120,15 @@ public class v1_teleop extends LinearOpMode {
     private AprilTagProcessor aprilTag;
 
     private MotorEx fL, fR, bL, bR;
+    private MotorEx intakeMotor;
     private MotorEx launcher1, launcher2;
     private MotorGroup launcherMotors;
     private MecanumDrive drive;
     private GamepadEx driverOp;
-    public MotorEx shooter;
-
+    private double dtSpeed;
+    private boolean cameraActive;
+    private boolean motorToggle = false;
+    public GamepadKeys keys = new GamepadKeys();
 
     private double[] cmd_vel = new double[3];
 
@@ -130,7 +140,6 @@ public class v1_teleop extends LinearOpMode {
     @Override
     public void runOpMode() {
         telemetryM = PanelsTelemetry.INSTANCE.getTelemetry();
-        graphM = PanelsGraph.INSTANCE.getManager();
         LoopTimer timer = new LoopTimer();
         initAprilTag();
         initMotors();
@@ -141,43 +150,43 @@ public class v1_teleop extends LinearOpMode {
         telemetry.update();
         List<LynxModule> hubs = hardwareMap.getAll(LynxModule.class);
         hubs.forEach(hub -> hub.setBulkCachingMode(LynxModule.BulkCachingMode.MANUAL));
+
         waitForStart();
         if (opModeIsActive()) {
             while (opModeIsActive()) {
                 hubs.forEach(LynxModule::clearBulkCache);
                 timer.start();
 
-                //Apriltag seeking/shooting mode
-                if (gamepad1.left_bumper) {
-                    visionPortal.resumeStreaming();
-                    telemetryAprilTag();
-                } else {
-                    visionPortal.stopStreaming();
-                }
+                //Selectively activate/deactivate camera for loop time
+                cameraTeleOp();
+
                 //Drive input based on gamepad + apriltag data
                 updateMotorVel();
                
-                //Check gamepad to activate laauncher if commanded
+                //Check gamepad to activate launcher if commanded
                 shooterTeleOp();
+
+                //Update intake power
+                intakeTeleOp();
 
                 //Attempt at updating graph for FTCControl Panels
                 List<Double> velocities = launcherMotors.getVelocities();
-                telemetryM.debug("Left Flywheel Velocity", velocities.get(0));
-                telemetryM.debug("Right Flywheel Velocity", velocities.get(1));
-                telemetryM.debug("Launcher Velocity",launcherMotors.getVelocity());
+                telemetryM.addData("Left Flywheel Velocity", velocities.get(0));
+                telemetryM.addData("Right Flywheel Velocity", velocities.get(1));
+                telemetryM.addData("Launcher Velocity",launcherMotors.getVelocity());
                 telemetryM.debug("Constant:",constant);
                 telemetryM.debug("LoopTime:", timer.getMs() / timer.getHz());
-                graphM.addData("Launcher Total Velocity",launcherMotors.getVelocity());
-                graphM.addData("Left FLywheel Velo",velocities.get(0));
-                graphM.addData("Righ FLywheel Velo",velocities.get(1));
-                graphM.addData("Constant:",constant);
-                graphM.addData("LoopTime:", timer.getMs() / timer.getHz());
-                graphM.update();
-                telemetryM.update(telemetry);
+                telemetryM.addData("Screen percentage",screenPercentage);
+                telemetryM.addData("April tag area (px)",aprilTagArea);
+
                 timer.end();
+                //graphM.update();
+                telemetryM.update(telemetry);
                 // Share the CPU.
-                
-//                sleep(20);
+
+                if (cameraActive) {
+                    sleep(20);
+                }
             }
         }
 
@@ -195,7 +204,7 @@ public class v1_teleop extends LinearOpMode {
         fR = new MotorEx(hardwareMap,"fR",Motor.GoBILDA.RPM_312);
         bL = new MotorEx(hardwareMap,"bL",Motor.GoBILDA.RPM_312);
         bR = new MotorEx(hardwareMap,"bR",Motor.GoBILDA.RPM_312);
-        shooter = new MotorEx(hardwareMap,"intakeMotor", Motor.GoBILDA.RPM_435);
+        intakeMotor = new MotorEx(hardwareMap,"intakeMotor", Motor.GoBILDA.RPM_435);
         launcher1 = new MotorEx(hardwareMap,"shooterMotor1", Motor.GoBILDA.BARE);
         launcher2 = new MotorEx(hardwareMap,"shooterMotor2", Motor.GoBILDA.BARE);
         launcher2.setInverted(true);
@@ -242,25 +251,33 @@ public class v1_teleop extends LinearOpMode {
     }   // end method telemetryAprilTag()
 
     private void updateMotorVel() {
-        if (!aprilTag.getDetections().isEmpty()) {
+        if (gamepad1.left_trigger > 0.2) {
+            dtSpeed = dtSpeedSlow;
+        } else {
+            dtSpeed = dtSpeedNormal;
+        }
+        if (!aprilTag.getDetections().isEmpty() && cameraActive) {
             List<AprilTagDetection> currentDetections = aprilTag.getDetections();
             telemetry.addData("# AprilTags Detected", currentDetections.size());
-
+            Point[] corners = currentDetections.get(0).corners;
+            double x_length = corners[0].x - corners[1].x;
+            double y_length = corners[0].y - corners[3].y;
+            aprilTagArea = x_length * y_length;
+            screenPercentage = (aprilTagArea / 230400) * 100;
             // Step through the list of detections and display info for each one.
             for (AprilTagDetection detection : currentDetections) {
                 if(detection.id == 20) {
                     if (detection.center.x - 320 < -deadzone || detection.center.x - 320 > deadzone) {
-
                         cmd_vel[0] = -driverOp.getLeftX() * 0.5;
                         cmd_vel[1] = -driverOp.getLeftY() * 0.5;
                         cmd_vel[2] = ((detection.center.x - 320) / 320) * -speed;
-                        if (cmd_vel[2] < 0.4 && cmd_vel[2] > 0) {
-                            cmd_vel[2] = 0.4;
+                        if (cmd_vel[2] < 0.25 && cmd_vel[2] > 0) {
+                            cmd_vel[2] = 0.25;
                         }
-                        if (cmd_vel[2] > -0.4 && cmd_vel[2] < 0) {
-                            cmd_vel[2] = -0.4;
+                        if (cmd_vel[2] > -0.25 && cmd_vel[2] < 0) {
+                            cmd_vel[2] = -0.25;
                         }
-                        deactivateBallLauncher();
+                        //deactivateBallLauncher();
                     }
                     else {
                         cmd_vel[0] = -driverOp.getLeftX() * 0.5;
@@ -270,16 +287,15 @@ public class v1_teleop extends LinearOpMode {
                     }
                 }
                 else {
-                    deactivateBallLauncher();
+                    //deactivateBallLauncher();
                 }
             }   // end for() loop
 
         }
         else {
-            cmd_vel[0] = -driverOp.getLeftX() * 0.5;
-            cmd_vel[1] = -driverOp.getLeftY() * 0.5;
-            cmd_vel[2] = -driverOp.getRightX() * 0.5;
-            deactivateBallLauncher();
+            cmd_vel[0] = -driverOp.getLeftX() * dtSpeed;
+            cmd_vel[1] = -driverOp.getLeftY() * dtSpeed;
+            cmd_vel[2] = -driverOp.getRightX() * dtSpeed;
         }
         drive.driveRobotCentric(
                 cmd_vel[0],
@@ -288,22 +304,63 @@ public class v1_teleop extends LinearOpMode {
         );
     }
 
+    private void cameraTeleOp() {
+        if (gamepad1.right_trigger > 0.2 && !cameraActive) {
+            cameraActive = true;
+        } else if (cameraActive) {
+            cameraActive = false;
+        }
+    }
+
     private void shooterTeleOp() {
-        if (gamepad2.a) {
+        if (gamepad1.right_bumper) {
             activateBallLauncher();
-        } else if (gamepad2.b) {
+        } else if (gamepad1.left_bumper) {
             deactivateBallLauncher();
         }
         if (Math.abs(gamepad2.left_stick_x) > 0.1) {
                     launcherMotors.set(gamepad2.left_stick_x);
         }
+        if (gamepad1.right_stick_button) {
+            deactivateBallLauncher();
+            intakeMotor.set(0);
+        }
+    }
+
+    private void intakeTeleOp() {
+        if (gamepad1.a) {
+            intakeMotor.set(intakeSpeed);
+        } else if (gamepad1.b) {
+            intakeMotor.set(-intakeRejectSpeed);
+            try {
+                Thread.sleep(500);
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+            }
+            intakeMotor.set(0);
+        } else if (gamepad1.y) {
+            intakeMotor.set(-intakeRejectSpeed);
+        }
     }
 
     private void activateBallLauncher() {
-        launcherMotors.set(shooterSpeed);
+        /*launcherMotors.set(-0.1 * shooterSpeed);
+        try {
+            Thread.sleep(1000);
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+        }*/
+        if (!motorToggle) {
+            launcherMotors.set(shooterSpeed);
+            motorToggle = true;
+        }
+    }
+    private double calculateMotorVelocity(double width) {
+        return 0.0;
     }
     private void deactivateBallLauncher() {
         launcherMotors.stopMotor();
+        motorToggle = false;
     }
 
 

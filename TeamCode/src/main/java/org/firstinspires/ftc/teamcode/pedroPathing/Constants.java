@@ -1,5 +1,7 @@
 package org.firstinspires.ftc.teamcode.pedroPathing;
 
+import com.bylazar.configurables.annotations.Configurable;
+import com.pedropathing.control.PIDFCoefficients;
 import com.pedropathing.follower.Follower;
 import com.pedropathing.follower.FollowerConstants;
 import com.pedropathing.ftc.FollowerBuilder;
@@ -11,13 +13,24 @@ import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 
 import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
-
+@Configurable
 public class Constants {
+
+    public static double linearVelocity = 64.485885;
+    public static double lateralVelocity = 51.281485;
+    public static double linearDeceleration = -33.753513;
+    public static double lateralDeceleration = -53.293454;
+
     public static FollowerConstants followerConstants = new FollowerConstants()
+        .translationalPIDFCoefficients(new PIDFCoefficients(0.1, 0, 0.01, 0.015))
+        .forwardZeroPowerAcceleration(linearDeceleration)
+        .lateralZeroPowerAcceleration(lateralDeceleration)
         .mass(5);
 
     public static MecanumConstants driveConstants = new MecanumConstants()
             .maxPower(1)
+            .xVelocity(linearVelocity)
+            .yVelocity(lateralVelocity)
             .rightFrontMotorName("fR")
             .rightRearMotorName("bR")
             .leftRearMotorName("bL")
@@ -28,7 +41,7 @@ public class Constants {
             .rightRearMotorDirection(DcMotorSimple.Direction.FORWARD);
 
     public static PinpointConstants localizerConstants = new PinpointConstants()
-            .forwardPodY(6.1)
+            .forwardPodY(-6.1)
             .strafePodX(-4.7)
             .distanceUnit(DistanceUnit.INCH)
             .hardwareMapName("pinpoint")
