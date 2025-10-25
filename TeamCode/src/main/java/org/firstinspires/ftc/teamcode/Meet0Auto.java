@@ -1,33 +1,5 @@
-/* Copyright (c) 2023 FIRST. All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without modification,
- * are permitted (subject to the limitations in the disclaimer below) provided that
- * the following conditions are met:
- *
- * Redistributions of source code must retain the above copyright notice, this list
- * of conditions and the following disclaimer.
- *
- * Redistributions in binary form must reproduce the above copyright notice, this
- * list of conditions and the following disclaimer in the documentation and/or
- * other materials provided with the distribution.
- *
- * Neither the name of FIRST nor the names of its contributors may be used to endorse or
- * promote products derived from this software without specific prior written permission.
- *
- * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE GRANTED BY THIS
- * LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
- * THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE
- * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
- * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
- * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
- * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- */
-
 package org.firstinspires.ftc.teamcode;
+import java.util.List;
 
 import com.bylazar.configurables.annotations.Configurable;
 import com.bylazar.configurables.annotations.IgnoreConfigurable;
@@ -35,11 +7,10 @@ import com.bylazar.telemetry.PanelsTelemetry;
 import com.bylazar.telemetry.TelemetryManager;
 import com.bylazar.utils.LoopTimer;
 import com.qualcomm.hardware.lynx.LynxModule;
+import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
-import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.seattlesolvers.solverslib.drivebase.MecanumDrive;
 import com.seattlesolvers.solverslib.gamepad.GamepadEx;
-import com.seattlesolvers.solverslib.gamepad.GamepadKeys;
 import com.seattlesolvers.solverslib.hardware.motors.Motor;
 import com.seattlesolvers.solverslib.hardware.motors.MotorEx;
 import com.seattlesolvers.solverslib.hardware.motors.MotorGroup;
@@ -51,36 +22,11 @@ import org.firstinspires.ftc.vision.apriltag.AprilTagDetection;
 import org.firstinspires.ftc.vision.apriltag.AprilTagProcessor;
 import org.opencv.core.Point;
 
-import java.util.List;
 
-/*
- * This OpMode illustrates the basics of AprilTag recognition and pose estimation,
- * including Java Builder structures for specifying Vision parameters.
- *
- * For an introduction to AprilTags, see the FTC-DOCS link below:
- * https://ftc-docs.firstinspires.org/en/latest/apriltag/vision_portal/apriltag_intro/apriltag-intro.html
- *
- * In this sample, any visible tag ID will be detected and displayed, but only tags that are included in the default
- * "TagLibrary" will have their position and orientation information displayed.  This default TagLibrary contains
- * the current Season's AprilTags and a small set of "test Tags" in the high number range.
- *
- * When an AprilTag in the TagLibrary is detected, the SDK provides location and orientation of the tag, relative to the camera.
- * This information is provided in the "ftcPose" member of the returned "detection", and is explained in the ftc-docs page linked below.
- * https://ftc-docs.firstinspires.org/apriltag-detection-values
- *
- * To experiment with using AprilTags to navigate, try out these two driving samples:
- * RobotAutoDriveToAprilTagOmni and RobotAutoDriveToAprilTagTank
- *
- * There are many "default" VisionPortal and AprilTag configuration parameters that may be overridden if desired.
- * These default parameters are shown as comments in the code below.
- *
- * Use Android Studio to Copy this Class, and Paste it into your team's code folder with a new name.
- * Remove or comment out the @Disabled line to add this OpMode to the Driver Station OpMode list.
- */
-@TeleOp(name = "Meet 0 Teleop", group = "0: Meet 0")
+@Autonomous(name = "Meet 0 Auto", group = "0: Meet 0")
 @Configurable
-//@Disabled
-public class v1_teleop extends LinearOpMode {
+
+public class Meet0Auto extends LinearOpMode {
 
     private static final boolean USE_WEBCAM = true;  // true for webcam, false for phone camera
     public static int deadzone = 30;
@@ -100,6 +46,7 @@ public class v1_teleop extends LinearOpMode {
     public static double startingVelocity = 0.89;
     public static double tagWeight = 0.015;
     public static double turnSpeed = 0.2;
+    public static double lastDitchPercent = 0.05;
 
     public static double kp = 1;
     public static double ki = 0;
@@ -130,7 +77,9 @@ public class v1_teleop extends LinearOpMode {
     private double dtSpeed;
     private boolean cameraActive;
     private boolean motorToggle = false;
-    public GamepadKeys keys = new GamepadKeys();
+    private int autoSteps = 0;
+    private int ballsLaunched;
+    private boolean ballLaunchedToggle = false;
 
     private double[] cmd_vel = new double[3];
 
@@ -159,19 +108,24 @@ public class v1_teleop extends LinearOpMode {
                 hubs.forEach(LynxModule::clearBulkCache);
                 timer.start();
 
-                //Selectively activate/deactivate camera for loop time
-                cameraTeleOp();
+                switch(autoSteps) {
+                    case 0:
+                        moveBackwards();
+                        telemetryM.addData("Wheel Position", fL.getCurrentPosition());
+                        break;
+                    case 1:
+                        launchRoutine();
+                        break;
+                    case 2:
+                        telemetryM.debug("Autonomous Complete");
+                        deactivateBallLauncher();
+                        intakeMotor.set(0);
+                        break;
+                }
 
-                //Drive input based on gamepad + apriltag data
-                updateMotorVel();
-               
-                //Check gamepad to activate launcher if commanded
-                shooterTeleOp();
 
-                //Update intake power
-                intakeTeleOp();
 
-                //Attempt at updating graph for FTCControl Panels
+                //Telemetry
                 List<Double> velocities = launcherMotors.getVelocities();
                 telemetryM.addData("Left Flywheel Velocity", velocities.get(0));
                 telemetryM.addData("Right Flywheel Velocity", velocities.get(1));
@@ -179,15 +133,9 @@ public class v1_teleop extends LinearOpMode {
                 telemetryM.debug("LoopTime:", timer.getMs() / timer.getHz());
                 telemetryM.addData("Screen percentage",screenPercentage);
                 telemetryM.addData("April tag area (px)",aprilTagArea);
-
                 timer.end();
-                //graphM.update();
                 telemetryM.update(telemetry);
-                // Share the CPU.
-
-                if (cameraActive) {
-                    sleep(20);
-                }
+                sleep(20);
             }
         }
 
@@ -216,14 +164,39 @@ public class v1_teleop extends LinearOpMode {
         launcherMotors.setRunMode(Motor.RunMode.VelocityControl);
         launcherMotors.setVeloCoefficients(kp, ki, kd);
         launcherMotors.setFeedforwardCoefficients(ks, kv);
-    
+
     }
 
 
+    private void moveBackwards() {
+        cmd_vel[0] = 0;
+        cmd_vel[1] = -0.3;
+        cmd_vel[2] = 0;
+        drive.driveRobotCentric(
+                cmd_vel[0],
+                cmd_vel[1],
+                cmd_vel[2]
+        );
+        if (Math.abs(fL.getCurrentPosition()) > 1000) {
+            autoSteps = 1;
+            cmd_vel[0] = 0;
+            cmd_vel[1] = 0;
+            cmd_vel[2] = 0;
+            drive.driveRobotCentric(
+                    cmd_vel[0],
+                    cmd_vel[1],
+                    cmd_vel[2]
+            );
+        }
+    }
 
-    /**
-     * Add telemetry about AprilTag detections.
-     */
+    private void launchRoutine() {
+        updateMotorVel();
+        if (ballsLaunched == 2) {
+            autoSteps = 2;
+        }
+    }
+
     private void telemetryAprilTag() {
 
         List<AprilTagDetection> currentDetections = aprilTag.getDetections();
@@ -252,17 +225,9 @@ public class v1_teleop extends LinearOpMode {
     }   // end method telemetryAprilTag()
 
     private void updateMotorVel() {
-        if (gamepad1.left_trigger > 0.2) {
-            dtSpeed = dtSpeedSlow;
-        } else {
-            dtSpeed = dtSpeedNormal;
-        }
-        if (gamepad2.left_bumper) {
-            autoLaunchMethod(Math.abs(10));
-        }
-        if (!aprilTag.getDetections().isEmpty() && cameraActive) {
+        if (!aprilTag.getDetections().isEmpty()) {
             List<AprilTagDetection> currentDetections = aprilTag.getDetections();
-            telemetry.addData("# AprilTags Detected", currentDetections.size());
+            telemetryM.debug("# AprilTags Detected", currentDetections.size());
             Point[] corners = currentDetections.get(0).corners;
             double x_length = corners[0].x - corners[1].x;
             double y_length = corners[0].y - corners[3].y;
@@ -281,66 +246,31 @@ public class v1_teleop extends LinearOpMode {
                         if (cmd_vel[2] > -turnSpeed && cmd_vel[2] < 0) {
                             cmd_vel[2] = -turnSpeed;
                         }
-                        //deactivateBallLauncher();
                     }
                     else {
-                        cmd_vel[0] = -driverOp.getLeftX() * 0.5;
-                        cmd_vel[1] = -driverOp.getLeftY() * 0.5;
+                        cmd_vel[0] = 0;
+                        cmd_vel[1] = 0;
                         cmd_vel[2] = 0;
 
                         autoLaunchMethod(Math.abs(screenPercentage));
                     }
                 }
                 else {
-
-                    //deactivateBallLauncher();
+                    autoLaunchMethod(lastDitchPercent);
                 }
             }   // end for() loop
 
         }
         else {
-            cmd_vel[0] = -driverOp.getLeftX() * dtSpeed;
-            cmd_vel[1] = -driverOp.getLeftY() * dtSpeed;
-            cmd_vel[2] = -driverOp.getRightX() * dtSpeed;
+            cmd_vel[0] = 0;
+            cmd_vel[1] = 0;
+            cmd_vel[2] = 0;
         }
         drive.driveRobotCentric(
                 cmd_vel[0],
                 cmd_vel[1],
                 cmd_vel[2]
         );
-    }
-
-    private void cameraTeleOp() {
-        if (gamepad2.right_trigger > 0.5 && !cameraActive) {
-            cameraActive = true;
-        } else {
-            cameraActive = false;
-        }
-    }
-
-    private void shooterTeleOp() {
-        if (gamepad2.dpad_up) {
-            activateBallLauncher();
-        } else if (gamepad2.dpad_down) {
-            deactivateBallLauncher();
-        }
-        if (Math.abs(gamepad2.left_stick_x) > 0.1) {
-                    launcherMotors.set(gamepad2.left_stick_x);
-        }
-        if (gamepad2.right_stick_button) {
-            deactivateBallLauncher();
-            intakeMotor.set(0);
-        }
-    }
-
-    private void intakeTeleOp() {
-        if (gamepad2.a) {
-            intakeMotor.set(intakeSpeed);
-        } else if (gamepad2.b) {
-            intakeMotor.set(0);
-        } else if (gamepad2.y) {
-            intakeMotor.set(-intakeRejectSpeed);
-        }
     }
 
     private void autoLaunchMethod(double screenPercentage) {
@@ -350,8 +280,15 @@ public class v1_teleop extends LinearOpMode {
         //begin checking if motor is at target speed
         if (Math.abs(launcherMotors.getVelocity()) >= minimumShooterSpeed) {
             upToSpeed = true;
+            if (Math.abs(launcherMotors.getVelocity()) >= minimumShooterSpeed + 60) {
+                ballLaunchedToggle = true;
+            }
         } else {
             upToSpeed = false;
+            if (ballLaunchedToggle) {
+                ballsLaunched += 1;
+            }
+            ballLaunchedToggle = false;
         }
         if (upToSpeed) {
             intakeMotor.set(intakeLoadSpeed);
@@ -359,6 +296,7 @@ public class v1_teleop extends LinearOpMode {
             intakeMotor.set(0);
         } //make intake hold instead of toggle for jeremy
     }
+
     private void shooterTarget(double motorTarget) {
         if (!motorToggle) {
             launcherMotors.set(motorTarget);
@@ -366,30 +304,25 @@ public class v1_teleop extends LinearOpMode {
         }
     }
     private void activateBallLauncher() {
-        /*launcherMotors.set(-0.1 * shooterSpeed);
-        try {
-            Thread.sleep(1000);
-        } catch (InterruptedException ie) {
-            Thread.currentThread().interrupt();
-        }*/
         if (!motorToggle) {
             launcherMotors.set(shooterSpeed);
             motorToggle = true;
         }
     }
+
     private double calculateMotorVelocity(double tagSize) {
         double motorVelocity;
         motorVelocity = startingVelocity - (tagSize * tagWeight);
-        telemetryM.addData("Motorvelocity command",motorVelocity);
+        telemetryM.addData("Motor Velocity command",motorVelocity);
         return motorVelocity;
     }
+
     private void deactivateBallLauncher() {
         launcherMotors.stopMotor();
         motorToggle = false;
     }
 
-
-        private void initAprilTag() {
+    private void initAprilTag() {
 
         // Create the AprilTag processor.
         aprilTag = new AprilTagProcessor.Builder()
