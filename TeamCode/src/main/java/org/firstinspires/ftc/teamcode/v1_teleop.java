@@ -82,9 +82,10 @@ import java.util.List;
 //@Disabled
 public class v1_teleop extends LinearOpMode {
 
+
     private static final boolean USE_WEBCAM = true;  // true for webcam, false for phone camera
     public static int deadzone = 30;
-    public static double speed = .5;
+    public static double turnSpeed = .5;
     public static double shooterSpeed = 0.75;
     public static double shooterRPM = 450;
     public static double dtSpeedNormal = 1.0;
@@ -99,7 +100,7 @@ public class v1_teleop extends LinearOpMode {
     public static double intakeLoadSpeed = 1;
     public static double startingVelocity = 0.89;
     public static double tagWeight = 0.015;
-    public static double turnSpeed = 0.2;
+    public static double minimumTurnSpeed = 0.1;
 
     public static double kp = 1;
     public static double ki = 0;
@@ -131,6 +132,7 @@ public class v1_teleop extends LinearOpMode {
     private boolean cameraActive;
     private boolean motorToggle = false;
     public GamepadKeys keys = new GamepadKeys();
+    public boolean shouldActivateBallLauncher = true;
 
     private double[] cmd_vel = new double[3];
 
@@ -143,7 +145,9 @@ public class v1_teleop extends LinearOpMode {
     public void runOpMode() {
         telemetryM = PanelsTelemetry.INSTANCE.getTelemetry();
         LoopTimer timer = new LoopTimer();
+        //set the default settings for April Tag detection
         initAprilTag();
+        //set the default settings for motors and initializes them (wow)
         initMotors();
 
         // Wait for the DS start button to be touched.
@@ -260,9 +264,12 @@ public class v1_teleop extends LinearOpMode {
         if (gamepad2.left_bumper) {
             autoLaunchMethod(Math.abs(10));
         }
+        //checks if it detects any April Tags.
         if (!aprilTag.getDetections().isEmpty() && cameraActive) {
             List<AprilTagDetection> currentDetections = aprilTag.getDetections();
             telemetry.addData("# AprilTags Detected", currentDetections.size());
+
+            //gets April Tag screen size
             Point[] corners = currentDetections.get(0).corners;
             double x_length = corners[0].x - corners[1].x;
             double y_length = corners[0].y - corners[3].y;
@@ -272,14 +279,20 @@ public class v1_teleop extends LinearOpMode {
             for (AprilTagDetection detection : currentDetections) {
                 if(detection.id == 20 || detection.id==24) {
                     if (detection.center.x - 320 < -deadzone || detection.center.x - 320 > deadzone) {
+                        //if it detects april tag, the robot will allow the driver to only control forward and strafing movement.
                         cmd_vel[0] = -driverOp.getLeftX() * 0.5;
                         cmd_vel[1] = -driverOp.getLeftY() * 0.5;
-                        cmd_vel[2] = ((detection.center.x - 320) / 320) * -speed;
-                        if (cmd_vel[2] < turnSpeed && cmd_vel[2] > 0) {
-                            cmd_vel[2] = turnSpeed;
+                        //based on april tags position on speed, the robot will set the rotation to move in the opposite direction.
+                        cmd_vel[2] = ((detection.center.x - 320) / 320) * -turnSpeed;
+                        if (shouldActivateBallLauncher) {
+                            activateBallLauncher();
+                            shouldActivateBallLauncher = false;
                         }
-                        if (cmd_vel[2] > -turnSpeed && cmd_vel[2] < 0) {
-                            cmd_vel[2] = -turnSpeed;
+                        if (cmd_vel[2] < minimumTurnSpeed && cmd_vel[2] > 0) {
+                            cmd_vel[2] = minimumTurnSpeed;
+                        }
+                        if (cmd_vel[2] > -minimumTurnSpeed && cmd_vel[2] < 0) {
+                            cmd_vel[2] = -minimumTurnSpeed;
                         }
                         //deactivateBallLauncher();
                     }
@@ -294,11 +307,13 @@ public class v1_teleop extends LinearOpMode {
                 else {
 
                     //deactivateBallLauncher();
+                    shouldActivateBallLauncher = true;
                 }
             }   // end for() loop
 
         }
         else {
+            shouldActivateBallLauncher = true;
             cmd_vel[0] = -driverOp.getLeftX() * dtSpeed;
             cmd_vel[1] = -driverOp.getLeftY() * dtSpeed;
             cmd_vel[2] = -driverOp.getRightX() * dtSpeed;

@@ -1,4 +1,5 @@
 package org.firstinspires.ftc.teamcode;
+import java.sql.Time;
 import java.util.List;
 
 import com.bylazar.configurables.annotations.Configurable;
@@ -9,6 +10,7 @@ import com.bylazar.utils.LoopTimer;
 import com.qualcomm.hardware.lynx.LynxModule;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
+import com.qualcomm.robotcore.util.ElapsedTime;
 import com.seattlesolvers.solverslib.drivebase.MecanumDrive;
 import com.seattlesolvers.solverslib.gamepad.GamepadEx;
 import com.seattlesolvers.solverslib.hardware.motors.Motor;
@@ -47,11 +49,12 @@ public class Meet0Auto extends LinearOpMode {
     public static double tagWeight = 0.015;
     public static double turnSpeed = 0.2;
     public static double lastDitchPercent = 0.05;
-
+    public static double firstMove = 1800;
+    public static double secondMove = 1200;
     public static double kp = 1;
     public static double ki = 0;
     public static double kd = 0;
-
+    public static boolean isRedAlliance = true;
     public static double ks = 0;
     public static double kv = 0.1;
 
@@ -80,6 +83,7 @@ public class Meet0Auto extends LinearOpMode {
     private int autoSteps = 0;
     private int ballsLaunched;
     private boolean ballLaunchedToggle = false;
+    private ElapsedTime autoTimer;
 
     private double[] cmd_vel = new double[3];
 
@@ -94,21 +98,25 @@ public class Meet0Auto extends LinearOpMode {
         LoopTimer timer = new LoopTimer();
         initAprilTag();
         initMotors();
+        resetMotors();
 
         // Wait for the DS start button to be touched.
         telemetry.addData("DS preview on/off", "3 dots, Camera Stream");
         telemetry.addData(">", "Touch START to start OpMode");
         telemetry.update();
+
         List<LynxModule> hubs = hardwareMap.getAll(LynxModule.class);
         hubs.forEach(hub -> hub.setBulkCachingMode(LynxModule.BulkCachingMode.MANUAL));
+        autoTimer = new ElapsedTime();
 
         waitForStart();
         if (opModeIsActive()) {
+            autoTimer.reset();
             while (opModeIsActive()) {
                 hubs.forEach(LynxModule::clearBulkCache);
                 timer.start();
 
-                switch(autoSteps) {
+                switch (autoSteps) {
                     case 0:
                         moveBackwards();
                         telemetryM.addData("Wheel Position", fL.getCurrentPosition());
@@ -117,28 +125,34 @@ public class Meet0Auto extends LinearOpMode {
                         launchRoutine();
                         break;
                     case 2:
-                        telemetryM.debug("Autonomous Complete");
+                        telemetryM.debug("Autonomous launched");
                         deactivateBallLauncher();
                         intakeMotor.set(0);
+                        resetMotors();
+                        autoSteps = 3;
+                    case 3:
+                        parkingSequence();
+                        break;
+                    case 4:
+                        telemetryM.debug("Auto Complete!");
                         break;
                 }
 
 
-
                 //Telemetry
                 List<Double> velocities = launcherMotors.getVelocities();
+                telemetryM.addData("Elapsed Time",autoTimer.seconds());
                 telemetryM.addData("Left Flywheel Velocity", velocities.get(0));
                 telemetryM.addData("Right Flywheel Velocity", velocities.get(1));
-                telemetryM.addData("Launcher Velocity",launcherMotors.getVelocity());
+                telemetryM.addData("Launcher Velocity", launcherMotors.getVelocity());
                 telemetryM.debug("LoopTime:", timer.getMs() / timer.getHz());
-                telemetryM.addData("Screen percentage",screenPercentage);
-                telemetryM.addData("April tag area (px)",aprilTagArea);
+                telemetryM.addData("Screen percentage", screenPercentage);
+                telemetryM.addData("April tag area (px)", aprilTagArea);
                 timer.end();
                 telemetryM.update(telemetry);
                 sleep(20);
             }
         }
-
         // Save more CPU resources when camera is no longer needed.
         visionPortal.close();
 
@@ -170,15 +184,49 @@ public class Meet0Auto extends LinearOpMode {
 
     private void moveBackwards() {
         cmd_vel[0] = 0;
-        cmd_vel[1] = -0.3;
+        cmd_vel[1] = 0.3;
         cmd_vel[2] = 0;
         drive.driveRobotCentric(
                 cmd_vel[0],
                 cmd_vel[1],
                 cmd_vel[2]
         );
-        if (Math.abs(fL.getCurrentPosition()) > 1000) {
+        if (Math.abs(fL.getCurrentPosition()) > firstMove) {
             autoSteps = 1;
+            cmd_vel[0] = 0;
+            cmd_vel[1] = 0;
+            cmd_vel[2] = 0;
+            drive.driveRobotCentric(
+                    cmd_vel[0],
+                    cmd_vel[1],
+                    cmd_vel[2]
+            );
+        }
+    }
+
+    private void checkTime() {
+        if (autoTimer.seconds() >= 10) {
+            if (autoSteps == 1) {
+                autoSteps = 2;
+            }
+        }
+    }
+
+    private void parkingSequence() {
+        if (isRedAlliance) {
+            cmd_vel[0] = -0.3;
+        } else if(!isRedAlliance) {
+            cmd_vel[0] = 0.3;
+        }
+        cmd_vel[1] = 0;
+        cmd_vel[2] = 0;
+        drive.driveRobotCentric(
+                cmd_vel[0],
+                cmd_vel[1],
+                cmd_vel[2]
+        );
+        if (Math.abs(fL.getCurrentPosition()) > secondMove) {
+            autoSteps = 4;
             cmd_vel[0] = 0;
             cmd_vel[1] = 0;
             cmd_vel[2] = 0;
@@ -192,9 +240,13 @@ public class Meet0Auto extends LinearOpMode {
 
     private void launchRoutine() {
         updateMotorVel();
-        if (ballsLaunched == 2) {
-            autoSteps = 2;
-        }
+    }
+
+    private void resetMotors() {
+        fL.resetEncoder();
+        fR.resetEncoder();
+        bL.resetEncoder();
+        bR.resetEncoder();
     }
 
     private void telemetryAprilTag() {
@@ -236,6 +288,11 @@ public class Meet0Auto extends LinearOpMode {
             // Step through the list of detections and display info for each one.
             for (AprilTagDetection detection : currentDetections) {
                 if(detection.id == 20 || detection.id==24) {
+                    if(detection.id == 20) {
+                        isRedAlliance = false;
+                    } else {
+                        isRedAlliance = true;
+                    }
                     if (detection.center.x - 320 < -deadzone || detection.center.x - 320 > deadzone) {
                         cmd_vel[0] = -driverOp.getLeftX() * 0.5;
                         cmd_vel[1] = -driverOp.getLeftY() * 0.5;
@@ -276,6 +333,7 @@ public class Meet0Auto extends LinearOpMode {
     private void autoLaunchMethod(double screenPercentage) {
         boolean upToSpeed;
         double motorTargetSpeed = calculateMotorVelocity(screenPercentage);
+        checkTime();
         shooterTarget(motorTargetSpeed);
         //begin checking if motor is at target speed
         if (Math.abs(launcherMotors.getVelocity()) >= minimumShooterSpeed) {
