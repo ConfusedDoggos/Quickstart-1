@@ -92,6 +92,7 @@ public class v1_teleop extends LinearOpMode {
     public static double dtSpeedSlow = 0.5;
     public static double intakeSpeed = 0.9;
     public static double intakeRejectSpeed = 0.3;
+    public static double launcherRejectSpeed = 0.7;
 
     //ShooterMethod variables
     public static int minimumShooterSpeed = 1300;
@@ -133,6 +134,7 @@ public class v1_teleop extends LinearOpMode {
     private boolean motorToggle = false;
     public GamepadKeys keys = new GamepadKeys();
     public boolean shouldActivateBallLauncher = true;
+    private boolean intakeResetToggle = true;
 
     private double[] cmd_vel = new double[3];
 
@@ -175,7 +177,7 @@ public class v1_teleop extends LinearOpMode {
                 //Update intake power
                 intakeTeleOp();
 
-                //Attempt at updating graph for FTCControl Panels
+                //Update telemetry for FTCControl Panels
                 List<Double> velocities = launcherMotors.getVelocities();
                 telemetryM.addData("Left Flywheel Velocity", velocities.get(0));
                 telemetryM.addData("Right Flywheel Velocity", velocities.get(1));
@@ -355,6 +357,20 @@ public class v1_teleop extends LinearOpMode {
             intakeMotor.set(0);
         } else if (gamepad2.y) {
             intakeMotor.set(-intakeRejectSpeed);
+        }
+        if (gamepad2.x && intakeResetToggle) {
+            intakeResetToggle = false;
+            intakeMotor.set(-intakeRejectSpeed);
+            motorToggle = true;
+            launcherMotors.set(-launcherRejectSpeed);
+            try {
+                Thread.sleep(200);
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+            }
+            intakeMotor.set(0);
+            deactivateBallLauncher();
+            intakeResetToggle = true;
         }
     }
 
