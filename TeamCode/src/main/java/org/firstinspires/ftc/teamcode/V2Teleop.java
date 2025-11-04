@@ -39,48 +39,23 @@ import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.seattlesolvers.solverslib.drivebase.MecanumDrive;
 import com.seattlesolvers.solverslib.gamepad.GamepadEx;
-import com.seattlesolvers.solverslib.gamepad.GamepadKeys;
 import com.seattlesolvers.solverslib.hardware.motors.Motor;
 import com.seattlesolvers.solverslib.hardware.motors.MotorEx;
 import com.seattlesolvers.solverslib.hardware.motors.MotorGroup;
+import com.seattlesolvers.solverslib.util.InterpLUT;
 
 import org.firstinspires.ftc.robotcore.external.hardware.camera.BuiltinCameraDirection;
 import org.firstinspires.ftc.robotcore.external.hardware.camera.WebcamName;
 import org.firstinspires.ftc.vision.VisionPortal;
 import org.firstinspires.ftc.vision.apriltag.AprilTagDetection;
 import org.firstinspires.ftc.vision.apriltag.AprilTagProcessor;
-import org.opencv.core.Point;
 
 import java.util.List;
 
-/*
- * This OpMode illustrates the basics of AprilTag recognition and pose estimation,
- * including Java Builder structures for specifying Vision parameters.
- *
- * For an introduction to AprilTags, see the FTC-DOCS link below:
- * https://ftc-docs.firstinspires.org/en/latest/apriltag/vision_portal/apriltag_intro/apriltag-intro.html
- *
- * In this sample, any visible tag ID will be detected and displayed, but only tags that are included in the default
- * "TagLibrary" will have their position and orientation information displayed.  This default TagLibrary contains
- * the current Season's AprilTags and a small set of "test Tags" in the high number range.
- *
- * When an AprilTag in the TagLibrary is detected, the SDK provides location and orientation of the tag, relative to the camera.
- * This information is provided in the "ftcPose" member of the returned "detection", and is explained in the ftc-docs page linked below.
- * https://ftc-docs.firstinspires.org/apriltag-detection-values
- *
- * To experiment with using AprilTags to navigate, try out these two driving samples:
- * RobotAutoDriveToAprilTagOmni and RobotAutoDriveToAprilTagTank
- *
- * There are many "default" VisionPortal and AprilTag configuration parameters that may be overridden if desired.
- * These default parameters are shown as comments in the code below.
- *
- * Use Android Studio to Copy this Class, and Paste it into your team's code folder with a new name.
- * Remove or comment out the @Disabled line to add this OpMode to the Driver Station OpMode list.
- */
+
 @TeleOp(name = "Meet 0 Teleop", group = "0: Meet 0")
 @Configurable
-//@Disabled
-public class v1_teleop extends LinearOpMode {
+public class V2Teleop extends LinearOpMode {
 
 
     private static final boolean USE_WEBCAM = true;  // true for webcam, false for phone camera
@@ -102,6 +77,9 @@ public class v1_teleop extends LinearOpMode {
     public static double startingVelocity = 0.89;
     public static double tagWeight = 0.015;
     public static double minimumTurnSpeed = 0.1;
+    public static double spinUpSpeed = 0.8;
+    public static double shooterToVelocity = 1800;
+    public static double launchTestVelocity = 0.8;
 
     public static double kp = 1;
     public static double ki = 0;
@@ -111,9 +89,6 @@ public class v1_teleop extends LinearOpMode {
     public static double kv = 0.1;
 
     public static double ka = 0;
-
-    public double aprilTagArea;
-    public double screenPercentage;
 
     @IgnoreConfigurable
     static TelemetryManager telemetryM;
@@ -132,9 +107,13 @@ public class v1_teleop extends LinearOpMode {
     private double dtSpeed;
     private boolean cameraActive;
     private boolean motorToggle = false;
-    public GamepadKeys keys = new GamepadKeys();
     public boolean shouldActivateBallLauncher = true;
     private boolean intakeResetToggle = true;
+    private boolean spinUpToggle = false;
+    private InterpLUT lut = new InterpLUT();
+
+
+    private double goalRange;
 
     private double[] cmd_vel = new double[3];
 
@@ -151,6 +130,9 @@ public class v1_teleop extends LinearOpMode {
         initAprilTag();
         //set the default settings for motors and initializes them (wow)
         initMotors();
+
+        //Create the Interpolated Lookup Table
+        createInterpLUT();
 
         // Wait for the DS start button to be touched.
         telemetry.addData("DS preview on/off", "3 dots, Camera Stream");
@@ -183,8 +165,7 @@ public class v1_teleop extends LinearOpMode {
                 telemetryM.addData("Right Flywheel Velocity", velocities.get(1));
                 telemetryM.addData("Launcher Velocity",launcherMotors.getVelocity());
                 telemetryM.debug("LoopTime:", timer.getMs() / timer.getHz());
-                telemetryM.addData("Screen percentage",screenPercentage);
-                telemetryM.addData("April tag area (px)",aprilTagArea);
+                telemetryM.addData("Distance From Goal", goalRange);
 
                 timer.end();
                 //graphM.update();
@@ -225,6 +206,28 @@ public class v1_teleop extends LinearOpMode {
     
     }
 
+    private void createInterpLUT() {
+        //create lookup table
+
+        //Add values (obtained empirically)
+        //Input is distance, output is shooter velocity
+        lut.add(0,0);
+        lut.add(29,0);
+        lut.add(30,0.70);
+        lut.add(35.7,0.73);
+        lut.add(55.6,0.76);
+        lut.add(43.4,0.73);
+        lut.add(60.2,0.84);
+        lut.add(86.5,0.91);
+        lut.add(99.6,0.96);
+        lut.add(150,1);
+        lut.createLUT();
+        //May need to create separate LUT for far zone, unsure if will be necessary or not.
+    }
+
+    private double calculateShooterPower(double distance) {
+        return lut.get(distance);
+    }
 
 
     /**
@@ -263,56 +266,43 @@ public class v1_teleop extends LinearOpMode {
         } else {
             dtSpeed = dtSpeedNormal;
         }
-        if (gamepad2.left_bumper) {
-            autoLaunchMethod(Math.abs(10));
-        }
         //checks if it detects any April Tags.
         if (!aprilTag.getDetections().isEmpty() && cameraActive) {
             List<AprilTagDetection> currentDetections = aprilTag.getDetections();
             telemetry.addData("# AprilTags Detected", currentDetections.size());
 
-            //gets April Tag screen size
-            Point[] corners = currentDetections.get(0).corners;
-            double x_length = corners[0].x - corners[1].x;
-            double y_length = corners[0].y - corners[3].y;
-            aprilTagArea = x_length * y_length;
-            screenPercentage = (aprilTagArea / 2304);
-            // Step through the list of detections and display info for each one.
             for (AprilTagDetection detection : currentDetections) {
                 if(detection.id == 20 || detection.id==24) {
+                    goalRange = detection.ftcPose.range;
                     if (detection.center.x - 320 < -deadzone || detection.center.x - 320 > deadzone) {
                         //if it detects april tag, the robot will allow the driver to only control forward and strafing movement.
                         cmd_vel[0] = -driverOp.getLeftX() * 0.5;
                         cmd_vel[1] = -driverOp.getLeftY() * 0.5;
                         //based on april tags position on speed, the robot will set the rotation to move in the opposite direction.
                         cmd_vel[2] = ((detection.center.x - 320) / 320) * -turnSpeed;
-                        if (shouldActivateBallLauncher) {
-                            activateBallLauncher();
-                            shouldActivateBallLauncher = false;
-                        }
                         if (cmd_vel[2] < minimumTurnSpeed && cmd_vel[2] > 0) {
                             cmd_vel[2] = minimumTurnSpeed;
                         }
                         if (cmd_vel[2] > -minimumTurnSpeed && cmd_vel[2] < 0) {
                             cmd_vel[2] = -minimumTurnSpeed;
                         }
-                        //deactivateBallLauncher();
                     }
                     else {
+
                         cmd_vel[0] = -driverOp.getLeftX() * 0.5;
                         cmd_vel[1] = -driverOp.getLeftY() * 0.5;
                         cmd_vel[2] = 0;
-
-                        autoLaunchMethod(Math.abs(screenPercentage));
+                        autoLaunchMethod(goalRange);
                     }
                 }
                 else {
-
-                    //deactivateBallLauncher();
-                    shouldActivateBallLauncher = true;
+                    //only if a non-goal is recognized (later apply for team-based opmodes?
                 }
             }   // end for() loop
 
+        }
+        if (cameraActive) {
+            spinUpLauncher();
         }
         else {
             shouldActivateBallLauncher = true;
@@ -350,6 +340,13 @@ public class v1_teleop extends LinearOpMode {
         }
     }
 
+    private void spinUpLauncher() {
+        if (spinUpToggle) {
+            launcherMotors.set(spinUpSpeed);
+            spinUpToggle = false;
+        }
+    }
+
     private void intakeTeleOp() {
         if (gamepad2.a) {
             intakeMotor.set(intakeSpeed);
@@ -374,12 +371,12 @@ public class v1_teleop extends LinearOpMode {
         }
     }
 
-    private void autoLaunchMethod(double screenPercentage) {
+    private void autoLaunchMethod(double distance) {
         boolean upToSpeed;
-        double motorTargetSpeed = calculateMotorVelocity(screenPercentage);
+        double motorTargetSpeed = calculateShooterPower(distance);
         shooterTarget(motorTargetSpeed);
         //begin checking if motor is at target speed
-        if (Math.abs(launcherMotors.getVelocity()) >= minimumShooterSpeed) {
+        if (Math.abs(launcherMotors.getVelocity()) >= motorTargetSpeed * shooterToVelocity) {
             upToSpeed = true;
         } else {
             upToSpeed = false;
@@ -388,7 +385,7 @@ public class v1_teleop extends LinearOpMode {
             intakeMotor.set(intakeLoadSpeed);
         } else {
             intakeMotor.set(0);
-        } //make intake hold instead of toggle for jeremy
+        }
     }
     private void shooterTarget(double motorTarget) {
         if (!motorToggle) {
@@ -397,23 +394,12 @@ public class v1_teleop extends LinearOpMode {
         }
     }
     private void activateBallLauncher() {
-        /*launcherMotors.set(-0.1 * shooterSpeed);
-        try {
-            Thread.sleep(1000);
-        } catch (InterruptedException ie) {
-            Thread.currentThread().interrupt();
-        }*/
         if (!motorToggle) {
             launcherMotors.set(shooterSpeed);
             motorToggle = true;
         }
     }
-    private double calculateMotorVelocity(double tagSize) {
-        double motorVelocity;
-        motorVelocity = startingVelocity - (tagSize * tagWeight);
-        telemetryM.addData("Motorvelocity command",motorVelocity);
-        return motorVelocity;
-    }
+
     private void deactivateBallLauncher() {
         launcherMotors.stopMotor();
         motorToggle = false;
