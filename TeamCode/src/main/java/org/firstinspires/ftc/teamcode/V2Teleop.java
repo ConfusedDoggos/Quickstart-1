@@ -37,6 +37,7 @@ import com.bylazar.utils.LoopTimer;
 import com.qualcomm.hardware.lynx.LynxModule;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
+import com.qualcomm.robotcore.util.ElapsedTime;
 import com.seattlesolvers.solverslib.drivebase.MecanumDrive;
 import com.seattlesolvers.solverslib.gamepad.GamepadEx;
 import com.seattlesolvers.solverslib.hardware.motors.Motor;
@@ -78,7 +79,7 @@ public class V2Teleop extends LinearOpMode {
     public static double tagWeight = 0.015;
     public static double minimumTurnSpeed = 0.1;
     public static double spinUpSpeed = 0.8;
-    public static double shooterToVelocity = 1800;
+    public static double shooterToVelocity = 1650;
     public static double launchTestVelocity = 0.8;
 
     public static double kp = 1;
@@ -111,6 +112,7 @@ public class V2Teleop extends LinearOpMode {
     private boolean intakeResetToggle = true;
     private boolean spinUpToggle = false;
     private InterpLUT lut = new InterpLUT();
+    private ElapsedTime teleTimer;
 
 
     private double goalRange;
@@ -140,9 +142,11 @@ public class V2Teleop extends LinearOpMode {
         telemetry.update();
         List<LynxModule> hubs = hardwareMap.getAll(LynxModule.class);
         hubs.forEach(hub -> hub.setBulkCachingMode(LynxModule.BulkCachingMode.MANUAL));
+        teleTimer = new ElapsedTime();
 
         waitForStart();
         if (opModeIsActive()) {
+            teleTimer.reset();
             while (opModeIsActive()) {
                 hubs.forEach(LynxModule::clearBulkCache);
                 timer.start();
@@ -166,6 +170,7 @@ public class V2Teleop extends LinearOpMode {
                 telemetryM.addData("Launcher Velocity",launcherMotors.getVelocity());
                 telemetryM.debug("LoopTime:", timer.getMs() / timer.getHz());
                 telemetryM.addData("Distance From Goal", goalRange);
+                telemetryM.addData("MotorVelocityAttempt",launcherMotors.get());
 
                 timer.end();
                 //graphM.update();
@@ -211,13 +216,12 @@ public class V2Teleop extends LinearOpMode {
 
         //Add values (obtained empirically)
         //Input is distance, output is shooter velocity
-        lut.add(0,0);
-        lut.add(29,0);
         lut.add(30,0.70);
         lut.add(35.7,0.73);
-        lut.add(55.6,0.76);
-        lut.add(43.4,0.73);
+        lut.add(43.4,0.75);
+        lut.add(55.6,0.78);
         lut.add(60.2,0.84);
+        lut.add(66,0.87);
         lut.add(86.5,0.91);
         lut.add(99.6,0.96);
         lut.add(150,1);
@@ -226,7 +230,11 @@ public class V2Teleop extends LinearOpMode {
     }
 
     private double calculateShooterPower(double distance) {
-        return lut.get(distance);
+        if (distance > 30 && distance < 150) {
+            return lut.get(distance);
+        } else {
+            return 0;
+        }
     }
 
 

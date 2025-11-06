@@ -107,7 +107,7 @@ public class Meet0Auto extends LinearOpMode {
 
         List<LynxModule> hubs = hardwareMap.getAll(LynxModule.class);
         hubs.forEach(hub -> hub.setBulkCachingMode(LynxModule.BulkCachingMode.MANUAL));
-        autoTimer = new ElapsedTime();
+
 
         waitForStart();
         if (opModeIsActive()) {
