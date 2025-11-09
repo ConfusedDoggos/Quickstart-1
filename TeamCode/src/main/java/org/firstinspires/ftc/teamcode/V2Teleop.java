@@ -79,15 +79,15 @@ public class V2Teleop extends LinearOpMode {
     public static double tagWeight = 0.015;
     public static double minimumTurnSpeed = 0.1;
     public static double spinUpSpeed = 0.8;
-    public static double shooterToVelocity = 1650;
+    public static double shooterToVelocity = 800;
     public static double launchTestVelocity = 0.8;
 
-    public static double kp = 1;
-    public static double ki = 0;
+    public static double kp = 0.7;
+    public static double ki = 300;
     public static double kd = 0;
 
     public static double ks = 0;
-    public static double kv = 0.1;
+    public static double kv = 0;
 
     public static double ka = 0;
 
@@ -201,14 +201,20 @@ public class V2Teleop extends LinearOpMode {
         launcher1 = new MotorEx(hardwareMap,"shooterMotor1", Motor.GoBILDA.BARE);
         launcher2 = new MotorEx(hardwareMap,"shooterMotor2", Motor.GoBILDA.BARE);
         launcher2.setInverted(true);
-        launcherMotors = new MotorGroup(launcher1,launcher2);
+
         drive = new MecanumDrive(fL, fR, bL, bR);
         driverOp = new GamepadEx(gamepad1);
 
-        launcherMotors.setRunMode(Motor.RunMode.VelocityControl);
-        launcherMotors.setVeloCoefficients(kp, ki, kd);
-        launcherMotors.setFeedforwardCoefficients(ks, kv);
-    
+//        launcherMotors.setRunMode(Motor.RunMode.VelocityControl);
+//        launcherMotors.setVeloCoefficients(kp, ki, kd);
+//        launcherMotors.setFeedforwardCoefficients(ks, kv);
+        launcher1.setRunMode(Motor.RunMode.VelocityControl);
+        launcher1.setVeloCoefficients(kp,ki,kd);
+        //launcher1.setFeedforwardCoefficients(ks,kv);
+        launcher2.setRunMode(Motor.RunMode.VelocityControl);
+        launcher2.setVeloCoefficients(kp,ki,kd);
+        //launcher2.setFeedforwardCoefficients(ks,kv);
+        launcherMotors = new MotorGroup(launcher1,launcher2);
     }
 
     private void createInterpLUT() {
@@ -216,21 +222,25 @@ public class V2Teleop extends LinearOpMode {
 
         //Add values (obtained empirically)
         //Input is distance, output is shooter velocity
-        lut.add(30,0.70);
-        lut.add(35.7,0.73);
-        lut.add(43.4,0.75);
-        lut.add(55.6,0.78);
-        lut.add(60.2,0.84);
-        lut.add(66,0.87);
-        lut.add(86.5,0.91);
-        lut.add(99.6,0.96);
-        lut.add(150,1);
+//        lut.add(30,0.70);
+//        lut.add(35.7,0.73);
+//        lut.add(43.4,0.75);
+//        lut.add(55.6,0.78);
+//        lut.add(60.2,0.84);
+//        lut.add(66,0.87);
+//        lut.add(86.5,0.91);
+//        lut.add(99.6,0.96);
+//        lut.add(150,1);
+        lut.add(46.3,0.55);
+        lut.add(52.6,0.605);
+        lut.add(61.2,0.65);
+        lut.add(76.54,0.67);
         lut.createLUT();
         //May need to create separate LUT for far zone, unsure if will be necessary or not.
     }
 
     private double calculateShooterPower(double distance) {
-        if (distance > 30 && distance < 150) {
+        if (distance > 46.3 && distance < 75) {
             return lut.get(distance);
         } else {
             return 0;
@@ -309,9 +319,6 @@ public class V2Teleop extends LinearOpMode {
             }   // end for() loop
 
         }
-        if (cameraActive) {
-            spinUpLauncher();
-        }
         else {
             shouldActivateBallLauncher = true;
             cmd_vel[0] = -driverOp.getLeftX() * dtSpeed;
@@ -338,6 +345,9 @@ public class V2Teleop extends LinearOpMode {
             activateBallLauncher();
         } else if (gamepad2.dpad_down) {
             deactivateBallLauncher();
+        }
+        if (gamepad2.dpad_left) {
+            launcherMotors.set(0);
         }
         if (Math.abs(gamepad2.left_stick_x) > 0.1) {
                     launcherMotors.set(gamepad2.left_stick_x);
@@ -382,6 +392,7 @@ public class V2Teleop extends LinearOpMode {
     private void autoLaunchMethod(double distance) {
         boolean upToSpeed;
         double motorTargetSpeed = calculateShooterPower(distance);
+        telemetryM.addData("Motor Speed",motorTargetSpeed);
         shooterTarget(motorTargetSpeed);
         //begin checking if motor is at target speed
         if (Math.abs(launcherMotors.getVelocity()) >= motorTargetSpeed * shooterToVelocity) {
@@ -396,16 +407,13 @@ public class V2Teleop extends LinearOpMode {
         }
     }
     private void shooterTarget(double motorTarget) {
-        if (!motorToggle) {
-            launcherMotors.set(motorTarget);
-            motorToggle = true;
-        }
+        launcherMotors.set(motorTarget);
+        motorToggle = true;
+
     }
     private void activateBallLauncher() {
-        if (!motorToggle) {
-            launcherMotors.set(shooterSpeed);
-            motorToggle = true;
-        }
+        launcherMotors.set(shooterSpeed);
+        motorToggle = true;
     }
 
     private void deactivateBallLauncher() {
