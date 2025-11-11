@@ -63,7 +63,6 @@ public class V2Teleop extends LinearOpMode {
     public static int deadzone = 30;
     public static double turnSpeed = .5;
     public static double shooterSpeed = 0.75;
-    public static double shooterRPM = 450;
     public static double dtSpeedNormal = 1.0;
     public static double dtSpeedSlow = 0.5;
     public static double intakeSpeed = 0.9;
@@ -71,16 +70,12 @@ public class V2Teleop extends LinearOpMode {
     public static double launcherRejectSpeed = 0.7;
 
     //ShooterMethod variables
-    public static int minimumShooterSpeed = 1300;
     public boolean shootingStarted;
     public boolean shooterFinished;
     public static double intakeLoadSpeed = 1;
-    public static double startingVelocity = 0.89;
-    public static double tagWeight = 0.015;
     public static double minimumTurnSpeed = 0.1;
     public static double spinUpSpeed = 0.8;
     public static double shooterToVelocity = 800;
-    public static double launchTestVelocity = 0.8;
 
     public static double kp = 0.7;
     public static double ki = 300;
@@ -107,12 +102,15 @@ public class V2Teleop extends LinearOpMode {
     private GamepadEx driverOp;
     private double dtSpeed;
     private boolean cameraActive;
-    private boolean motorToggle = false;
     public boolean shouldActivateBallLauncher = true;
     private boolean intakeResetToggle = true;
     private boolean spinUpToggle = false;
     private InterpLUT lut = new InterpLUT();
     private ElapsedTime teleTimer;
+
+    private double previousVelocity = 0;
+    private boolean launcherRecovering = false;
+    private int ballsLaunched = 0;
 
 
     private double goalRange;
@@ -171,6 +169,7 @@ public class V2Teleop extends LinearOpMode {
                 telemetryM.debug("LoopTime:", timer.getMs() / timer.getHz());
                 telemetryM.addData("Distance From Goal", goalRange);
                 telemetryM.addData("MotorVelocityAttempt",launcherMotors.get());
+                telemetryM.addData("Balls Launched",ballsLaunched);
 
                 timer.end();
                 //graphM.update();
@@ -222,15 +221,6 @@ public class V2Teleop extends LinearOpMode {
 
         //Add values (obtained empirically)
         //Input is distance, output is shooter velocity
-//        lut.add(30,0.70);
-//        lut.add(35.7,0.73);
-//        lut.add(43.4,0.75);
-//        lut.add(55.6,0.78);
-//        lut.add(60.2,0.84);
-//        lut.add(66,0.87);
-//        lut.add(86.5,0.91);
-//        lut.add(99.6,0.96);
-//        lut.add(150,1);
         lut.add(46.3,0.55);
         lut.add(52.6,0.605);
         lut.add(61.2,0.65);
@@ -333,10 +323,11 @@ public class V2Teleop extends LinearOpMode {
     }
 
     private void cameraTeleOp() {
-        if (gamepad2.right_trigger > 0.5 && !cameraActive) {
+        if (gamepad2.right_trigger > 0.5) {
             cameraActive = true;
         } else {
             cameraActive = false;
+            ballsLaunched = 0;
         }
     }
 
@@ -376,7 +367,6 @@ public class V2Teleop extends LinearOpMode {
         if (gamepad2.x && intakeResetToggle) {
             intakeResetToggle = false;
             intakeMotor.set(-intakeRejectSpeed);
-            motorToggle = true;
             launcherMotors.set(-launcherRejectSpeed);
             try {
                 Thread.sleep(200);
@@ -393,32 +383,33 @@ public class V2Teleop extends LinearOpMode {
         boolean upToSpeed;
         double motorTargetSpeed = calculateShooterPower(distance);
         telemetryM.addData("Motor Speed",motorTargetSpeed);
-        shooterTarget(motorTargetSpeed);
         //begin checking if motor is at target speed
-        if (Math.abs(launcherMotors.getVelocity()) >= motorTargetSpeed * shooterToVelocity) {
-            upToSpeed = true;
+        if (ballsLaunched < 3) {
+            shooterTarget(motorTargetSpeed);
+            if (Math.abs(launcherMotors.getVelocity()) >= motorTargetSpeed * shooterToVelocity) {
+                intakeMotor.set(intakeLoadSpeed);
+                launcherRecovering = false;
+            }
+            if ((Math.abs(previousVelocity) + 61) < Math.abs(launcherMotors.getVelocity()) && !launcherRecovering) {
+                launcherRecovering = true;
+                ballsLaunched += 1;
+                intakeMotor.set(0);
+            }
+            previousVelocity = launcherMotors.getVelocity();
         } else {
-            upToSpeed = false;
+            deactivateBallLauncher();
         }
-        if (upToSpeed) {
-            intakeMotor.set(intakeLoadSpeed);
-        } else {
-            intakeMotor.set(0);
-        }
+
     }
     private void shooterTarget(double motorTarget) {
         launcherMotors.set(motorTarget);
-        motorToggle = true;
-
     }
     private void activateBallLauncher() {
         launcherMotors.set(shooterSpeed);
-        motorToggle = true;
     }
 
     private void deactivateBallLauncher() {
         launcherMotors.stopMotor();
-        motorToggle = false;
     }
 
 
