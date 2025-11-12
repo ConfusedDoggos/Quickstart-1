@@ -24,6 +24,7 @@ import com.pedropathing.geometry.Pose;
 import com.pedropathing.paths.Path;
 import com.pedropathing.paths.PathChain;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.util.ElapsedTime;
 import org.firstinspires.ftc.robotcore.external.hardware.camera.BuiltinCameraDirection;
@@ -38,6 +39,7 @@ import java.util.List;
 @Autonomous(name = "April Tag with PP test", group = "Opmode")
 @Configurable // Panels
 @SuppressWarnings("FieldCanBeLocal") // Stop Android Studio from bugging about variables being predefined
+@Disabled
 public class ExampleAuto extends LinearOpMode {
     // Initialize elapsed timer
     private final ElapsedTime runtime = new ElapsedTime();

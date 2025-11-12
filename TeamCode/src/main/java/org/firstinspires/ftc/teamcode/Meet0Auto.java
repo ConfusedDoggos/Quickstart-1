@@ -9,6 +9,7 @@ import com.bylazar.telemetry.TelemetryManager;
 import com.bylazar.utils.LoopTimer;
 import com.qualcomm.hardware.lynx.LynxModule;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.util.ElapsedTime;
 import com.seattlesolvers.solverslib.drivebase.MecanumDrive;
@@ -27,6 +28,7 @@ import org.opencv.core.Point;
 
 @Autonomous(name = "Meet 0 Auto", group = "0: Meet 0")
 @Configurable
+@Disabled
 
 public class Meet0Auto extends LinearOpMode {
 

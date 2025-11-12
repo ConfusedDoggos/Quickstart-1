@@ -75,7 +75,7 @@ import java.util.List;
  */
 @TeleOp(name = "Simple Apriltag Auto", group = "Auto")
 @Configurable
-//@Disabled
+@Disabled
 public class AprilTagSimpleAuto extends LinearOpMode {
 
     private static final boolean USE_WEBCAM = true;  // true for webcam, false for phone camera

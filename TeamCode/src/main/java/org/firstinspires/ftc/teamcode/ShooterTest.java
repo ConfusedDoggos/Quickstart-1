@@ -1,6 +1,7 @@
 package org.firstinspires.ftc.teamcode;
 
 
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.seattlesolvers.solverslib.drivebase.MecanumDrive;
@@ -9,6 +10,7 @@ import com.seattlesolvers.solverslib.hardware.motors.Motor;
 import com.seattlesolvers.solverslib.hardware.motors.MotorEx;
 
 @TeleOp(name = "ShootAS",group = "AS")
+@Disabled
 public class ShooterTest extends OpMode {
     public MotorEx shooter, intake;
     private MotorEx fL, fR, bL, bR;
