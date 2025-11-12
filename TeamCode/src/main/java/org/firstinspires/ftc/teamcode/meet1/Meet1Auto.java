@@ -44,7 +44,8 @@ public class Meet1Auto extends LinearOpMode {
     private final ElapsedTime runtime = new ElapsedTime();
 
     //Panels Editable Variables
-    public static double intakeDistance = 30;
+    public static double PPGIntakeX = 16;
+    public static double PGPINtakeX = 9;
 
     //Imported Variables (So only teleop has to be tuned)
     public double kp = Meet1Teleop.kp;
@@ -55,11 +56,11 @@ public class Meet1Auto extends LinearOpMode {
     private final Pose startPose = new Pose(33, 135, Math.toRadians(90)); // Start Pose of our robot.
     private final Pose scorePose = new Pose(48, 96, Math.toRadians(135)); // Scoring Pose of our robot. It is facing the goal at a 135 degree angle.
     private final Pose PPGPose = new Pose(46, 83.5, Math.toRadians(180)); // Highest (First Set) of Artifacts from the Spike Mark.
-    private final Pose PPGPickupPose = new Pose(PPGPose.getX()-intakeDistance, PPGPose.getY(),PPGPose.getHeading());
+    private final Pose PPGPickupPose = new Pose(PPGIntakeX, PPGPose.getY(),PPGPose.getHeading()); // Where to drive to while intaking PPG
     private final Pose PGPPose = new Pose(46, 59.5, Math.toRadians(180)); // Middle (Second Set) of Artifacts from the Spike Mark.
-    private final Pose PGPPickupPose = new Pose(PGPPose.getX()-intakeDistance, PGPPose.getY(),PGPPose.getHeading());
-    private final Pose PGPToScoreControlPoint = new Pose(50,60);
-    private final Pose parkPose = new Pose(40,70,Math.toRadians(135));
+    private final Pose PGPPickupPose = new Pose(PGPINtakeX, PGPPose.getY(),PGPPose.getHeading()); // WHere to drive to while intaking PGP
+    private final Pose PGPToScoreControlPoint = new Pose(50,60); // Control point to define bezier curve
+    private final Pose parkPose = new Pose(40,70,Math.toRadians(135)); // Final position to exit launch zone
 
     //PedroPathing PathChains
     private PathChain startToScore;
@@ -115,8 +116,7 @@ public class Meet1Auto extends LinearOpMode {
             currentPose = follower.getPose();
 
 
-            //Overall state machine function to simplify code
-            autoStateMachine();
+            autoStateMachine(); //Overall state machine function to simplify code
 
             updateShooterSpeed(); // Ensures that PID is always updating for motor power
 
@@ -135,79 +135,79 @@ public class Meet1Auto extends LinearOpMode {
             case -1:
                 break;
             case 0:
-                follower.followPath(startToScore);
+                follower.followPath(startToScore); // Move to scoring position
                 autoState=1;
                 break;
             case 1:
-                if (!follower.isBusy()) {
-                    scoreArtifacts();
+                if (!follower.isBusy()) { //Once move is finished
+                    scoreArtifacts(); // Activate scoring procedure
                     autoState=2;
                 }
                 break;
             case 2:
                 if (sequenceFinished) { //Once artifacts are scored
-                    sequenceFinished=false;
-                    follower.followPath(scoreToPPG);
+                    sequenceFinished=false; //Reset variable
+                    follower.followPath(scoreToPPG); // Move to PPG Intake pos
                     autoState=3;
                 }
                 break;
             case 3:
-                if (!follower.isBusy()) {
-                    intakeArtifacts();
-                    follower.setMaxPower(0.5);
-                    follower.followPath(PPGToIntake);
+                if (!follower.isBusy()) { //Once move is finished
+                    intakeArtifacts(); // Activate intake
+                    follower.setMaxPower(0.5); // Move slower?
+                    follower.followPath(PPGToIntake); // Move forwards while intaking
                     autoState=4;
                 }
                 break;
             case 4:
                 if (!follower.isBusy()) {
-                    follower.setMaxPower(1);
-                    resetMotors();
-                    rejectArtifacts();
-                    follower.followPath(PPGIntakeToScore);
+                    follower.setMaxPower(1); // Back to normal speed
+                    resetMotors(); // Turn off motors
+                    rejectArtifacts(); // Turn launcher backwards to get stuck balls hopefully out
+                    follower.followPath(PPGIntakeToScore); // Move back to scoring position
                     autoState=5;
                 }
                 break;
             case 5:
-                if (!follower.isBusy()) {
-                    scoreArtifacts();
+                if (!follower.isBusy()) { //Once move is finished
+                    scoreArtifacts(); // Artifact scoring procedure
                     autoState=6;
                 }
                 break;
             case 6:
                 if (sequenceFinished) { //If shooter is finished
-                    sequenceFinished = false;
-                    follower.followPath(scoreToPGP);
+                    sequenceFinished = false; // Reset variable
+                    follower.followPath(scoreToPGP); // Move to PGP intake position
                     autoState=7;
                 }
                 break;
             case 7:
                 if (!follower.isBusy()) {
-                    follower.setMaxPower(0.5);
-                    intakeArtifacts();
-                    follower.followPath(PGPToIntake);
+                    follower.setMaxPower(0.5); // Go slower?
+                    intakeArtifacts(); // Activate intake
+                    follower.followPath(PGPToIntake); // Move forwards while intaking
                     autoState=8;
                 }
                 break;
             case 8:
-                if (!follower.isBusy()) {
-                    resetMotors();
-                    rejectArtifacts();
-                    follower.setMaxPower(1);
-                    follower.followPath(PGPIntakeToScore);
+                if (!follower.isBusy()) { // Once move is complete
+                    resetMotors(); // Disable intake/launcher
+                    rejectArtifacts(); // Run launcher backwards to push out stuck artifacts
+                    follower.setMaxPower(1); // Back to max speed
+                    follower.followPath(PGPIntakeToScore); // Go back to scoring position
                     autoState=9;
                 }
                 break;
             case 9:
-                if (!follower.isBusy()) {
-                    scoreArtifacts();
+                if (!follower.isBusy()) { // Once move is complete
+                    scoreArtifacts(); // Launcher procedure
                     autoState=10;
                 }
                 break;
             case 10:
                 if (sequenceFinished) { //If shooter is finished
-                    sequenceFinished = false;
-                    follower.followPath(scoreToPark);
+                    sequenceFinished = false; // Reset variable
+                    follower.followPath(scoreToPark); // Go to parking position
                     autoState=11;
                 }
                 break;
