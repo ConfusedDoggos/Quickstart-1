@@ -1,6 +1,33 @@
+/* Copyright (c) 2023 FIRST. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without modification,
+ * are permitted (subject to the limitations in the disclaimer below) provided that
+ * the following conditions are met:
+ *
+ * Redistributions of source code must retain the above copyright notice, this list
+ * of conditions and the following disclaimer.
+ *
+ * Redistributions in binary form must reproduce the above copyright notice, this
+ * list of conditions and the following disclaimer in the documentation and/or
+ * other materials provided with the distribution.
+ *
+ * Neither the name of FIRST nor the names of its contributors may be used to endorse or
+ * promote products derived from this software without specific prior written permission.
+ *
+ * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE GRANTED BY THIS
+ * LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
+ * THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
 package org.firstinspires.ftc.teamcode;
-import java.sql.Time;
-import java.util.List;
 
 import com.bylazar.configurables.annotations.Configurable;
 import com.bylazar.configurables.annotations.IgnoreConfigurable;
@@ -8,62 +35,58 @@ import com.bylazar.telemetry.PanelsTelemetry;
 import com.bylazar.telemetry.TelemetryManager;
 import com.bylazar.utils.LoopTimer;
 import com.qualcomm.hardware.lynx.LynxModule;
-import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
+import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.util.ElapsedTime;
 import com.seattlesolvers.solverslib.drivebase.MecanumDrive;
 import com.seattlesolvers.solverslib.gamepad.GamepadEx;
 import com.seattlesolvers.solverslib.hardware.motors.Motor;
 import com.seattlesolvers.solverslib.hardware.motors.MotorEx;
 import com.seattlesolvers.solverslib.hardware.motors.MotorGroup;
+import com.seattlesolvers.solverslib.util.InterpLUT;
 
 import org.firstinspires.ftc.robotcore.external.hardware.camera.BuiltinCameraDirection;
 import org.firstinspires.ftc.robotcore.external.hardware.camera.WebcamName;
 import org.firstinspires.ftc.vision.VisionPortal;
 import org.firstinspires.ftc.vision.apriltag.AprilTagDetection;
 import org.firstinspires.ftc.vision.apriltag.AprilTagProcessor;
-import org.opencv.core.Point;
+
+import java.util.List;
 
 
-@Autonomous(name = "Meet 0 Auto", group = "0: Meet 0")
+@TeleOp(name = "Meet 0 Teleop", group = "0: Meet 0")
 @Configurable
 @Disabled
+public class V2Teleop extends LinearOpMode {
 
-public class Meet0Auto extends LinearOpMode {
 
     private static final boolean USE_WEBCAM = true;  // true for webcam, false for phone camera
     public static int deadzone = 30;
-    public static double speed = .5;
+    public static double turnSpeed = .5;
     public static double shooterSpeed = 0.75;
-    public static double shooterRPM = 450;
     public static double dtSpeedNormal = 1.0;
     public static double dtSpeedSlow = 0.5;
     public static double intakeSpeed = 0.9;
     public static double intakeRejectSpeed = 0.3;
+    public static double launcherRejectSpeed = 0.7;
 
     //ShooterMethod variables
-    public static int minimumShooterSpeed = 1300;
     public boolean shootingStarted;
     public boolean shooterFinished;
     public static double intakeLoadSpeed = 1;
-    public static double startingVelocity = 0.89;
-    public static double tagWeight = 0.015;
-    public static double turnSpeed = 0.2;
-    public static double lastDitchPercent = 0.05;
-    public static double firstMove = 1800;
-    public static double secondMove = 1200;
-    public static double kp = 1;
-    public static double ki = 0;
+    public static double minimumTurnSpeed = 0.1;
+    public static double spinUpSpeed = 0.8;
+    public static double shooterToVelocity = 800;
+
+    public static double kp = 0.7;
+    public static double ki = 300;
     public static double kd = 0;
-    public static boolean isRedAlliance = true;
+
     public static double ks = 0;
-    public static double kv = 0.1;
+    public static double kv = 0;
 
     public static double ka = 0;
-
-    public double aprilTagArea;
-    public double screenPercentage;
 
     @IgnoreConfigurable
     static TelemetryManager telemetryM;
@@ -81,11 +104,18 @@ public class Meet0Auto extends LinearOpMode {
     private GamepadEx driverOp;
     private double dtSpeed;
     private boolean cameraActive;
-    private boolean motorToggle = false;
-    private int autoSteps = 0;
-    private int ballsLaunched;
-    private boolean ballLaunchedToggle = false;
-    private ElapsedTime autoTimer;
+    public boolean shouldActivateBallLauncher = true;
+    private boolean intakeResetToggle = true;
+    private boolean spinUpToggle = false;
+    private InterpLUT lut = new InterpLUT();
+    private ElapsedTime teleTimer;
+
+    private double previousVelocity = 0;
+    private boolean launcherRecovering = false;
+    private int ballsLaunched = 0;
+
+
+    private double goalRange;
 
     private double[] cmd_vel = new double[3];
 
@@ -98,63 +128,62 @@ public class Meet0Auto extends LinearOpMode {
     public void runOpMode() {
         telemetryM = PanelsTelemetry.INSTANCE.getTelemetry();
         LoopTimer timer = new LoopTimer();
+        //set the default settings for April Tag detection
         initAprilTag();
+        //set the default settings for motors and initializes them (wow)
         initMotors();
-        resetMotors();
+
+        //Create the Interpolated Lookup Table
+        createInterpLUT();
 
         // Wait for the DS start button to be touched.
         telemetry.addData("DS preview on/off", "3 dots, Camera Stream");
         telemetry.addData(">", "Touch START to start OpMode");
         telemetry.update();
-
         List<LynxModule> hubs = hardwareMap.getAll(LynxModule.class);
         hubs.forEach(hub -> hub.setBulkCachingMode(LynxModule.BulkCachingMode.MANUAL));
-
+        teleTimer = new ElapsedTime();
 
         waitForStart();
         if (opModeIsActive()) {
-            autoTimer.reset();
+            teleTimer.reset();
             while (opModeIsActive()) {
                 hubs.forEach(LynxModule::clearBulkCache);
                 timer.start();
 
-                switch (autoSteps) {
-                    case 0:
-                        moveBackwards();
-                        telemetryM.addData("Wheel Position", fL.getCurrentPosition());
-                        break;
-                    case 1:
-                        launchRoutine();
-                        break;
-                    case 2:
-                        telemetryM.debug("Autonomous launched");
-                        deactivateBallLauncher();
-                        intakeMotor.set(0);
-                        resetMotors();
-                        autoSteps = 3;
-                    case 3:
-                        parkingSequence();
-                        break;
-                    case 4:
-                        telemetryM.debug("Auto Complete!");
-                        break;
-                }
+                //Selectively activate/deactivate camera for loop time
+                cameraTeleOp();
 
+                //Drive input based on gamepad + apriltag data
+                updateMotorVel();
+               
+                //Check gamepad to activate launcher if commanded
+                shooterTeleOp();
 
-                //Telemetry
+                //Update intake power
+                intakeTeleOp();
+
+                //Update telemetry for FTCControl Panels
                 List<Double> velocities = launcherMotors.getVelocities();
-                telemetryM.addData("Elapsed Time",autoTimer.seconds());
                 telemetryM.addData("Left Flywheel Velocity", velocities.get(0));
                 telemetryM.addData("Right Flywheel Velocity", velocities.get(1));
-                telemetryM.addData("Launcher Velocity", launcherMotors.getVelocity());
+                telemetryM.addData("Launcher Velocity",launcherMotors.getVelocity());
                 telemetryM.debug("LoopTime:", timer.getMs() / timer.getHz());
-                telemetryM.addData("Screen percentage", screenPercentage);
-                telemetryM.addData("April tag area (px)", aprilTagArea);
+                telemetryM.addData("Distance From Goal", goalRange);
+                telemetryM.addData("MotorVelocityAttempt",launcherMotors.get());
+                telemetryM.addData("Balls Launched",ballsLaunched);
+
                 timer.end();
+                //graphM.update();
                 telemetryM.update(telemetry);
-                sleep(20);
+                // Share the CPU.
+
+                if (cameraActive) {
+                    sleep(20);
+                }
             }
         }
+
         // Save more CPU resources when camera is no longer needed.
         visionPortal.close();
 
@@ -173,84 +202,47 @@ public class Meet0Auto extends LinearOpMode {
         launcher1 = new MotorEx(hardwareMap,"shooterMotor1", Motor.GoBILDA.BARE);
         launcher2 = new MotorEx(hardwareMap,"shooterMotor2", Motor.GoBILDA.BARE);
         launcher2.setInverted(true);
-        launcherMotors = new MotorGroup(launcher1,launcher2);
+
         drive = new MecanumDrive(fL, fR, bL, bR);
         driverOp = new GamepadEx(gamepad1);
 
-        launcherMotors.setRunMode(Motor.RunMode.VelocityControl);
-        launcherMotors.setVeloCoefficients(kp, ki, kd);
-        launcherMotors.setFeedforwardCoefficients(ks, kv);
-
+//        launcherMotors.setRunMode(Motor.RunMode.VelocityControl);
+//        launcherMotors.setVeloCoefficients(kp, ki, kd);
+//        launcherMotors.setFeedforwardCoefficients(ks, kv);
+        launcher1.setRunMode(Motor.RunMode.VelocityControl);
+        launcher1.setVeloCoefficients(kp,ki,kd);
+        //launcher1.setFeedforwardCoefficients(ks,kv);
+        launcher2.setRunMode(Motor.RunMode.VelocityControl);
+        launcher2.setVeloCoefficients(kp,ki,kd);
+        //launcher2.setFeedforwardCoefficients(ks,kv);
+        launcherMotors = new MotorGroup(launcher1,launcher2);
     }
 
+    private void createInterpLUT() {
+        //create lookup table
 
-    private void moveBackwards() {
-        cmd_vel[0] = 0;
-        cmd_vel[1] = 0.3;
-        cmd_vel[2] = 0;
-        drive.driveRobotCentric(
-                cmd_vel[0],
-                cmd_vel[1],
-                cmd_vel[2]
-        );
-        if (Math.abs(fL.getCurrentPosition()) > firstMove) {
-            autoSteps = 1;
-            cmd_vel[0] = 0;
-            cmd_vel[1] = 0;
-            cmd_vel[2] = 0;
-            drive.driveRobotCentric(
-                    cmd_vel[0],
-                    cmd_vel[1],
-                    cmd_vel[2]
-            );
+        //Add values (obtained empirically)
+        //Input is distance, output is shooter velocity
+        lut.add(46.3,0.55);
+        lut.add(52.6,0.605);
+        lut.add(61.2,0.65);
+        lut.add(76.54,0.67);
+        lut.createLUT();
+        //May need to create separate LUT for far zone, unsure if will be necessary or not.
+    }
+
+    private double calculateShooterPower(double distance) {
+        if (distance > 46.3 && distance < 75) {
+            return lut.get(distance);
+        } else {
+            return 0;
         }
     }
 
-    private void checkTime() {
-        if (autoTimer.seconds() >= 10) {
-            if (autoSteps == 1) {
-                autoSteps = 2;
-            }
-        }
-    }
 
-    private void parkingSequence() {
-        if (isRedAlliance) {
-            cmd_vel[0] = -0.3;
-        } else if(!isRedAlliance) {
-            cmd_vel[0] = 0.3;
-        }
-        cmd_vel[1] = 0;
-        cmd_vel[2] = 0;
-        drive.driveRobotCentric(
-                cmd_vel[0],
-                cmd_vel[1],
-                cmd_vel[2]
-        );
-        if (Math.abs(fL.getCurrentPosition()) > secondMove) {
-            autoSteps = 4;
-            cmd_vel[0] = 0;
-            cmd_vel[1] = 0;
-            cmd_vel[2] = 0;
-            drive.driveRobotCentric(
-                    cmd_vel[0],
-                    cmd_vel[1],
-                    cmd_vel[2]
-            );
-        }
-    }
-
-    private void launchRoutine() {
-        updateMotorVel();
-    }
-
-    private void resetMotors() {
-        fL.resetEncoder();
-        fR.resetEncoder();
-        bL.resetEncoder();
-        bR.resetEncoder();
-    }
-
+    /**
+     * Add telemetry about AprilTag detections.
+     */
     private void telemetryAprilTag() {
 
         List<AprilTagDetection> currentDetections = aprilTag.getDetections();
@@ -279,51 +271,51 @@ public class Meet0Auto extends LinearOpMode {
     }   // end method telemetryAprilTag()
 
     private void updateMotorVel() {
-        if (!aprilTag.getDetections().isEmpty()) {
+        if (gamepad1.left_trigger > 0.2) {
+            dtSpeed = dtSpeedSlow;
+        } else {
+            dtSpeed = dtSpeedNormal;
+        }
+        //checks if it detects any April Tags.
+        if (!aprilTag.getDetections().isEmpty() && cameraActive) {
             List<AprilTagDetection> currentDetections = aprilTag.getDetections();
-            telemetryM.debug("# AprilTags Detected", currentDetections.size());
-            Point[] corners = currentDetections.get(0).corners;
-            double x_length = corners[0].x - corners[1].x;
-            double y_length = corners[0].y - corners[3].y;
-            aprilTagArea = x_length * y_length;
-            screenPercentage = (aprilTagArea / 2304);
-            // Step through the list of detections and display info for each one.
+            telemetry.addData("# AprilTags Detected", currentDetections.size());
+
             for (AprilTagDetection detection : currentDetections) {
                 if(detection.id == 20 || detection.id==24) {
-                    if(detection.id == 20) {
-                        isRedAlliance = false;
-                    } else {
-                        isRedAlliance = true;
-                    }
+                    goalRange = detection.ftcPose.range;
                     if (detection.center.x - 320 < -deadzone || detection.center.x - 320 > deadzone) {
+                        //if it detects april tag, the robot will allow the driver to only control forward and strafing movement.
                         cmd_vel[0] = -driverOp.getLeftX() * 0.5;
                         cmd_vel[1] = -driverOp.getLeftY() * 0.5;
-                        cmd_vel[2] = ((detection.center.x - 320) / 320) * -speed;
-                        if (cmd_vel[2] < turnSpeed && cmd_vel[2] > 0) {
-                            cmd_vel[2] = turnSpeed;
+                        //based on april tags position on speed, the robot will set the rotation to move in the opposite direction.
+                        cmd_vel[2] = ((detection.center.x - 320) / 320) * -turnSpeed;
+                        if (cmd_vel[2] < minimumTurnSpeed && cmd_vel[2] > 0) {
+                            cmd_vel[2] = minimumTurnSpeed;
                         }
-                        if (cmd_vel[2] > -turnSpeed && cmd_vel[2] < 0) {
-                            cmd_vel[2] = -turnSpeed;
+                        if (cmd_vel[2] > -minimumTurnSpeed && cmd_vel[2] < 0) {
+                            cmd_vel[2] = -minimumTurnSpeed;
                         }
                     }
                     else {
-                        cmd_vel[0] = 0;
-                        cmd_vel[1] = 0;
-                        cmd_vel[2] = 0;
 
-                        autoLaunchMethod(Math.abs(screenPercentage));
+                        cmd_vel[0] = -driverOp.getLeftX() * 0.5;
+                        cmd_vel[1] = -driverOp.getLeftY() * 0.5;
+                        cmd_vel[2] = 0;
+                        autoLaunchMethod(goalRange);
                     }
                 }
                 else {
-                    autoLaunchMethod(lastDitchPercent);
+                    //only if a non-goal is recognized (later apply for team-based opmodes?
                 }
             }   // end for() loop
 
         }
         else {
-            cmd_vel[0] = 0;
-            cmd_vel[1] = 0;
-            cmd_vel[2] = 0;
+            shouldActivateBallLauncher = true;
+            cmd_vel[0] = -driverOp.getLeftX() * dtSpeed;
+            cmd_vel[1] = -driverOp.getLeftY() * dtSpeed;
+            cmd_vel[2] = -driverOp.getRightX() * dtSpeed;
         }
         drive.driveRobotCentric(
                 cmd_vel[0],
@@ -332,57 +324,98 @@ public class Meet0Auto extends LinearOpMode {
         );
     }
 
-    private void autoLaunchMethod(double screenPercentage) {
-        boolean upToSpeed;
-        double motorTargetSpeed = calculateMotorVelocity(screenPercentage);
-        checkTime();
-        shooterTarget(motorTargetSpeed);
-        //begin checking if motor is at target speed
-        if (Math.abs(launcherMotors.getVelocity()) >= minimumShooterSpeed) {
-            upToSpeed = true;
-            if (Math.abs(launcherMotors.getVelocity()) >= minimumShooterSpeed + 60) {
-                ballLaunchedToggle = true;
-            }
+    private void cameraTeleOp() {
+        if (gamepad2.right_trigger > 0.5) {
+            cameraActive = true;
         } else {
-            upToSpeed = false;
-            if (ballLaunchedToggle) {
-                ballsLaunched += 1;
-            }
-            ballLaunchedToggle = false;
+            cameraActive = false;
+            ballsLaunched = 0;
         }
-        if (upToSpeed) {
-            intakeMotor.set(intakeLoadSpeed);
-        } else {
-            intakeMotor.set(0);
-        } //make intake hold instead of toggle for jeremy
     }
 
-    private void shooterTarget(double motorTarget) {
-        if (!motorToggle) {
-            launcherMotors.set(motorTarget);
-            motorToggle = true;
+    private void shooterTeleOp() {
+        if (gamepad2.dpad_up) {
+            activateBallLauncher();
+        } else if (gamepad2.dpad_down) {
+            deactivateBallLauncher();
         }
+        if (gamepad2.dpad_left) {
+            launcherMotors.set(0);
+        }
+        if (Math.abs(gamepad2.left_stick_x) > 0.1) {
+                    launcherMotors.set(gamepad2.left_stick_x);
+        }
+        if (gamepad2.right_stick_button) {
+            deactivateBallLauncher();
+            intakeMotor.set(0);
+        }
+    }
+
+    private void spinUpLauncher() {
+        if (spinUpToggle) {
+            launcherMotors.set(spinUpSpeed);
+            spinUpToggle = false;
+        }
+    }
+
+    private void intakeTeleOp() {
+        if (gamepad2.a) {
+            intakeMotor.set(intakeSpeed);
+        } else if (gamepad2.b) {
+            intakeMotor.set(0);
+        } else if (gamepad2.y) {
+            intakeMotor.set(-intakeRejectSpeed);
+        }
+        if (gamepad2.x && intakeResetToggle) {
+            intakeResetToggle = false;
+            intakeMotor.set(-intakeRejectSpeed);
+            launcherMotors.set(-launcherRejectSpeed);
+            try {
+                Thread.sleep(200);
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+            }
+            intakeMotor.set(0);
+            deactivateBallLauncher();
+            intakeResetToggle = true;
+        }
+    }
+
+    private void autoLaunchMethod(double distance) {
+        boolean upToSpeed;
+        double motorTargetSpeed = calculateShooterPower(distance);
+        telemetryM.addData("Motor Speed",motorTargetSpeed);
+        //begin checking if motor is at target speed
+        if (ballsLaunched < 3) {
+            shooterTarget(motorTargetSpeed);
+            if (Math.abs(launcherMotors.getVelocity()) >= motorTargetSpeed * shooterToVelocity) {
+                intakeMotor.set(intakeLoadSpeed);
+                launcherRecovering = false;
+            }
+            if ((Math.abs(previousVelocity) + 61) < Math.abs(launcherMotors.getVelocity()) && !launcherRecovering) {
+                launcherRecovering = true;
+                ballsLaunched += 1;
+                intakeMotor.set(0);
+            }
+            previousVelocity = launcherMotors.getVelocity();
+        } else {
+            deactivateBallLauncher();
+        }
+
+    }
+    private void shooterTarget(double motorTarget) {
+        launcherMotors.set(motorTarget);
     }
     private void activateBallLauncher() {
-        if (!motorToggle) {
-            launcherMotors.set(shooterSpeed);
-            motorToggle = true;
-        }
-    }
-
-    private double calculateMotorVelocity(double tagSize) {
-        double motorVelocity;
-        motorVelocity = startingVelocity - (tagSize * tagWeight);
-        telemetryM.addData("Motor Velocity command",motorVelocity);
-        return motorVelocity;
+        launcherMotors.set(shooterSpeed);
     }
 
     private void deactivateBallLauncher() {
         launcherMotors.stopMotor();
-        motorToggle = false;
     }
 
-    private void initAprilTag() {
+
+        private void initAprilTag() {
 
         // Create the AprilTag processor.
         aprilTag = new AprilTagProcessor.Builder()
