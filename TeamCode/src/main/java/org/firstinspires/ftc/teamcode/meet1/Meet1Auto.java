@@ -45,10 +45,11 @@ public class Meet1Auto extends LinearOpMode {
 
     //Panels Editable Variables
     public static double intakeDistance = 30;
+
+    //Imported Variables (So only teleop has to be tuned)
     public double kp = Meet1Teleop.kp;
     public double ki = Meet1Teleop.ki;
     public double kd = Meet1Teleop.kd;
-
 
     //PedroPathing Poses
     private final Pose startPose = new Pose(33, 135, Math.toRadians(90)); // Start Pose of our robot.
@@ -77,6 +78,7 @@ public class Meet1Auto extends LinearOpMode {
     private int ballsLaunched = 0;
     private boolean sequenceFinished = true;
     private boolean launchArtifacts = false;
+    private double shooterStartTime;
 
     //Motor Objects
     private MotorEx intakeMotor, launcher1, launcher2;
@@ -118,7 +120,7 @@ public class Meet1Auto extends LinearOpMode {
 
             updateShooterSpeed(); // Ensures that PID is always updating for motor power
 
-            autoLaunchSequence();
+            autoLaunchSequence(); // Ensures that launch sequence will occur when necessary
 
             telemetryM.addData("Elapsed",runtime.toString());
             telemetryM.addData("X",currentPose.getX());
@@ -240,6 +242,7 @@ public class Meet1Auto extends LinearOpMode {
                 break;
             case 0:
                 launcherState = 1;
+                shooterStartTime = runtime;
                 break;
             case 1:
                 //check if launcher is up to speed
@@ -257,7 +260,7 @@ public class Meet1Auto extends LinearOpMode {
                     ballsLaunched+=1;
                     launcherState=1;
                 }
-                if (ballsLaunched==3) {
+                if (ballsLaunched==3 || (runtime-shooterStartTime) > 5) {
                     launcherState = 3;
                     ballsLaunched=0;
                     sequenceFinished = true;
