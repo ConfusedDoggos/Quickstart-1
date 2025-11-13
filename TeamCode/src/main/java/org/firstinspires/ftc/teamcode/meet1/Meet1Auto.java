@@ -39,10 +39,12 @@ public class Meet1Auto extends LinearOpMode {
 
     //Timer
     private final ElapsedTime sinceLastBall = new ElapsedTime(ElapsedTime.Resolution.SECONDS);
+    private final ElapsedTime autoTimer = new ElapsedTime(ElapsedTime.Resolution.SECONDS);
 
     //Panels Editable Variables
     public static double PPGIntakeX = 18;
     public static double PGPIntakeX = 12;
+    public static double GPPIntakeX = 12;
     public static double intakeMaxPower = 0.35;
 
     public static double kp = 0.7;
@@ -56,10 +58,14 @@ public class Meet1Auto extends LinearOpMode {
     private final Pose PPGPickupPose = new Pose(PPGIntakeX, PPGPose.getY(),PPGPose.getHeading()); // Where to drive to while intaking PPG
     private final Pose PGPPose = new Pose(46, 62.5, Math.toRadians(180)); // Middle (Second Set) of Artifacts from the Spike Mark.
     private final Pose PGPPickupPose = new Pose(PGPIntakeX, PGPPose.getY(),PGPPose.getHeading()); // WHere to drive to while intaking PGP
-    private final Pose PGBBackPose = new Pose(40, PGPPickupPose.getY(), PGPPickupPose.getHeading());
     private final Pose PGPToScoreControlPoint = new Pose(50,40); // Control point to define bezier curve
+    private final Pose GPPPose = new Pose(100, 37.5, Math.toRadians(0)); // Lowest (Third Set) of Artifacts from the Spike Mark.
+    private final Pose GPPPickupPose = new Pose(GPPIntakeX,GPPPose.getY(),GPPPose.getHeading()); // Drive forwards to intake artifacts
     private final Pose parkPose = new Pose(40,70,Math.toRadians(135)); // Final position to exit launch zone
 
+/*
+    private final Pose PGBBackPose = new Pose(40, PGPPickupPose.getY(), PGPPickupPose.getHeading());
+*/
     //PedroPathing PathChains
     private PathChain startToScore;
     private PathChain scoreToPPG;
@@ -67,8 +73,10 @@ public class Meet1Auto extends LinearOpMode {
     private PathChain PPGIntakeToScore;
     private PathChain scoreToPGP;
     private PathChain PGPToIntake;
-    private PathChain PGPIntakeBack;
     private PathChain PGPIntakeToScore;
+    private PathChain scoreToGPP;
+    private PathChain GPPToIntake;
+    private PathChain GPPIntaketoScore;
     private PathChain scoreToPark;
 
     //Changing variables
@@ -105,6 +113,7 @@ public class Meet1Auto extends LinearOpMode {
 
         waitForStart();
         sinceLastBall.reset();
+        autoTimer.reset();
         while (opModeIsActive()) {
 
             hubs.forEach(LynxModule::clearBulkCache); //Bulk reading
@@ -200,32 +209,68 @@ public class Meet1Auto extends LinearOpMode {
                     resetMotors(); // Disable intake/launcher
                     rejectArtifacts(); // Run launcher backwards to push out stuck artifacts
                     follower.setMaxPower(1); // Back to max speed
-                    follower.followPath(PGPIntakeBack); // Go back to scoring position
+                    follower.followPath(PGPIntakeToScore); // Go back to scoring position
                     autoState=9;
                 }
                 break;
             case 9:
-                if (!follower.isBusy()) {
-                    follower.followPath(PGPIntakeToScore);
+                if (!follower.isBusy()) { // Once move is complete
+                    scoreArtifacts(); // Launcher procedure
                     autoState=10;
                 }
                 break;
             case 10:
-                if (!follower.isBusy()) { // Once move is complete
-                    scoreArtifacts(); // Launcher procedure
-                    autoState=11;
+                if (sequenceFinished) { //If shooter is finished
+                    sequenceFinished = false; // Reset variable
+                    if (autoTimer > 26) {
+                        autoState = 14 // park to end auto
+                    } else {
+                        follower.followPath(scoreToGPP); // Go to parking position
+                        autoState=11;
+                    }
+                    
                 }
                 break;
             case 11:
-                if (sequenceFinished) { //If shooter is finished
-                    sequenceFinished = false; // Reset variable
-                    follower.followPath(scoreToPark); // Go to parking position
+                if (!follower.isBusy()) {
+                    follower.setMaxPower(intakeMaxPower); // Go slower?
+                    intakeArtifacts(); // Activate intake
+                    follower.followPath(GPPToIntake); // Move forwards while intaking
                     autoState=12;
                 }
                 break;
-            case 12: //resetting or any other things necessary before autonomous ends
-                resetMotors();
-                autoState=-1;
+            case 12:
+                if (!follower.isBusy()) {
+                    resetMotors(); // Disable intake/launcher
+                    rejectArtifacts(); // Run launcher backwards to push out stuck artifacts
+                    follower.setMaxPower(1); // Back to max speed
+                    if (autoTimer > 25) {
+                        autoState = 14;
+                    } else {
+                        follower.followPath(GPPIntaketoSore); // Go back to scoring position
+                        autoState=13;
+                    }
+                }
+                break;
+            case 13:
+                if (!follower.isBusy()) {
+                    scoreArtifacts();
+                    autoState = 14;
+                }
+                break;
+            case 14: 
+                if (sequenceFinished) {
+                    sequenceFinished = false;
+                    resetMotors();
+                    follower.followPath(scoreToPark);
+                    autoState = 15;
+                }
+                break;
+            case 15: //resetting or any other things necessary before autonomous ends
+                if (!follower.isBusy()) {
+                    resetMotors();
+                    autoState=-1;
+                }
                 break;
         }
     }
@@ -286,7 +331,6 @@ public class Meet1Auto extends LinearOpMode {
                         sequenceFinished = true;
                     }
                 }
-
                 break;
             case 3:
                 resetMotors();
@@ -368,41 +412,53 @@ public class Meet1Auto extends LinearOpMode {
 
     public void buildPaths() {
         startToScore = follower.pathBuilder()
-                .addPath(new BezierLine(startPose,scorePose))
-                .setLinearHeadingInterpolation(startPose.getHeading(),scorePose.getHeading())
-                .build();
+            .addPath(new BezierLine(startPose,scorePose))
+            .setLinearHeadingInterpolation(startPose.getHeading(),scorePose.getHeading())
+            .build();
         scoreToPPG = follower.pathBuilder()
-                .addPath(new BezierLine(scorePose,PPGPose))
-                .setLinearHeadingInterpolation(scorePose.getHeading(),PPGPose.getHeading())
-                .build();
+            .addPath(new BezierLine(scorePose,PPGPose))
+            .setLinearHeadingInterpolation(scorePose.getHeading(),PPGPose.getHeading())
+            .build();
         PPGToIntake = follower.pathBuilder()
-                .addPath(new BezierLine(PPGPose,PPGPickupPose))
-                .setLinearHeadingInterpolation(PPGPose.getHeading(),PPGPickupPose.getHeading())
-                .build();
+            .addPath(new BezierLine(PPGPose,PPGPickupPose))
+            .setLinearHeadingInterpolation(PPGPose.getHeading(),PPGPickupPose.getHeading())
+            .build();
         PPGIntakeToScore = follower.pathBuilder()
-                .addPath(new BezierLine(PPGPickupPose,scorePose))
-                .setLinearHeadingInterpolation(PPGPickupPose.getHeading(),scorePose.getHeading())
-                .build();
+            .addPath(new BezierLine(PPGPickupPose,scorePose))
+            .setLinearHeadingInterpolation(PPGPickupPose.getHeading(),scorePose.getHeading())
+            .build();
         scoreToPGP = follower.pathBuilder()
-                .addPath(new BezierLine(scorePose,PGPPose))
-                .setLinearHeadingInterpolation(scorePose.getHeading(),PGPPose.getHeading())
-                .build();
+            .addPath(new BezierLine(scorePose,PGPPose))
+            .setLinearHeadingInterpolation(scorePose.getHeading(),PGPPose.getHeading())
+            .build();
         PGPToIntake = follower.pathBuilder()
-                .addPath(new BezierLine(PGPPose,PGPPickupPose))
-                .setLinearHeadingInterpolation(PGPPose.getHeading(),PGPPickupPose.getHeading())
-                .build();
-        PGPIntakeBack = follower.pathBuilder()
-                .addPath(new BezierLine(PGPPickupPose,PGBBackPose))
-                .setLinearHeadingInterpolation(PGPPose.getHeading(),PGPPose.getHeading())
-                .build();
+            .addPath(new BezierLine(PGPPose,PGPPickupPose))
+            .setLinearHeadingInterpolation(PGPPose.getHeading(),PGPPickupPose.getHeading())
+            .build();
         PGPIntakeToScore = follower.pathBuilder()
-                .addPath(new BezierLine(PGBBackPose,scorePose))
-                .setLinearHeadingInterpolation(PGPPickupPose.getHeading(),scorePose.getHeading())
-                .build();
+            .addPath(new BezierLine(PGPPickupPose,PGPPose))
+            .setLinearHeadingInterpolation(PGPPose.getHeading(),PGPPose.getHeading())
+            .addPath(new BezierLine(PGPPose,scorePose))
+            .setLinearHeadingInterpolation(PGPPickupPose.getHeading(),scorePose.getHeading())
+            .build();
+        scoreToGPP = follower.pathBuilder()
+            .addPath(new BezierLine(scorePose,GPPPose))
+            .setLinearHeadingInterpolation(scorePose.getHEading(),GPPPose.getHeading())
+            .build();
+        GPPToIntake = follower.pathBuilder()
+            .addPath(new BezierLine(GPPPose,GPPPickupPose))
+            .setLinearHeadingInterpolation(GPPPose.getHeading(),GPPPickupPose.getHeading())
+            .build();
+        GPPIntaketoScore = follower.pathBuilder()
+            .addPath(new BezierLine(GPPPickupPose,GPPPose))
+            .setLinearHeadingInterpolation(GPPPickupPose.getHeading(),GPPPose.getHeading)
+            .addPath(new BezierLine(GPPPose,scorePose))
+            .setLinearHeadingInterpolation(GPPPose.getHeading(),scorePose.getHeading())
+            .build();
         scoreToPark = follower.pathBuilder()
-                .addPath(new BezierLine(scorePose,parkPose))
-                .setLinearHeadingInterpolation(scorePose.getHeading(),parkPose.getHeading())
-                .build();
+            .addPath(new BezierLine(scorePose,parkPose))
+            .setLinearHeadingInterpolation(scorePose.getHeading(),parkPose.getHeading())
+            .build();
     }
 
 }
