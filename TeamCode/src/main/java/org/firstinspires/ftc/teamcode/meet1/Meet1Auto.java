@@ -8,8 +8,6 @@ import com.bylazar.configurables.annotations.Configurable;
 import com.bylazar.configurables.annotations.IgnoreConfigurable;
 import com.bylazar.telemetry.PanelsTelemetry;
 import com.bylazar.telemetry.TelemetryManager;
-import com.pedropathing.follower.Follower;
-import com.pedropathing.geometry.BezierCurve;
 import com.pedropathing.geometry.BezierLine;
 import com.pedropathing.geometry.Pose;
 import com.pedropathing.paths.PathChain;
@@ -25,8 +23,7 @@ import com.seattlesolvers.solverslib.util.InterpLUT;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
 import java.util.List;
-
-import kotlin.sequences.Sequence;
+import java.util.concurrent.TimeUnit;
 
 @Autonomous(name = "Meet 1 Auto", group = "Autonomous")
 @Configurable // Panels
@@ -41,7 +38,7 @@ public class Meet1Auto extends LinearOpMode {
     private Pose currentPose;
 
     //Timer
-    private final ElapsedTime runtime = new ElapsedTime();
+    private final ElapsedTime sinceLastBall = new ElapsedTime(ElapsedTime.Resolution.SECONDS);
 
     //Panels Editable Variables
     public static double PPGIntakeX = 18;
@@ -106,7 +103,7 @@ public class Meet1Auto extends LinearOpMode {
         hubs.forEach(hub -> hub.setBulkCachingMode(LynxModule.BulkCachingMode.MANUAL)); //Bulk read to reduce loop time
 
         waitForStart();
-
+        sinceLastBall.reset();
         while (opModeIsActive()) {
 
             hubs.forEach(LynxModule::clearBulkCache); //Bulk reading
@@ -122,6 +119,8 @@ public class Meet1Auto extends LinearOpMode {
             autoLaunchSequence(); // Ensures that launch sequence will occur when necessary
 
             updateShooterSpeed(); // Ensures that PID is always updating for motor power
+
+            checkLaunchTime(); // Ensures that launcher will continue even if it doesn't have 3 total balls
 
 
 //            telemetryM.addData("Elapsed",runtime.toString());
@@ -239,6 +238,10 @@ public class Meet1Auto extends LinearOpMode {
         launchArtifacts = true;
     }
 
+    public void checkLaunchTime() {
+
+    }
+
     public void autoLaunchSequence() { //Do automatic routine, make a global boolean true once all three balls have been launched or a few seconds have passed
         double motorTargetSpeed = calculateShooterPower(50);
         double motorTargetVelocity = calculateShooterVelocity(motorTargetSpeed);
@@ -260,17 +263,23 @@ public class Meet1Auto extends LinearOpMode {
                 shooterInput = motorTargetSpeed;
                 if (Math.abs(launcherMotors.getVelocity()) >= motorTargetVelocity-shooterVelocityGap) {
                     intakeMotor.set(intakeLoadSpeed);
+                    sinceLastBall.reset();
                     launcherState = 2;
                 }
                 break;
             case 2:
                 //Check if launcher is below speed by a significant amount
                 shooterInput = motorTargetSpeed;
+                if (sinceLastBall.now(TimeUnit.SECONDS) > 1.5) {
+                    launcherState=3;
+                    ballsLaunched=0;
+                    sequenceFinished=true;
+                }
                 if (Math.abs(launcherMotors.getVelocity()) <= motorTargetVelocity-shooterVelocityGap*1.5) {
                     intakeMotor.set(0);
                     ballsLaunched+=1;
                     launcherState=1;
-                    if (ballsLaunched==3 /*|| (runtime.seconds()-shooterStartTime) > 5*/) {
+                    if (ballsLaunched==3) {
                         launcherState = 3;
                         ballsLaunched=0;
                         sequenceFinished = true;
