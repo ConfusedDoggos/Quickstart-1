@@ -347,6 +347,7 @@ public class Meet1Teleop extends LinearOpMode {
             cmd_vel[0] = -driverOp.getLeftX() * dtSpeed;
             cmd_vel[1] = -driverOp.getLeftY() * dtSpeed;
             cmd_vel[2] = -driverOp.getRightX() * dtSpeed;
+            goalInSight = false;
         }
         drive.driveRobotCentric(
                 cmd_vel[0],
@@ -411,7 +412,7 @@ public class Meet1Teleop extends LinearOpMode {
 
         telemetryM.addData("Motor Speed",motorTargetSpeed);
         telemetryM.addData("Motor Velocity Target",motorTargetVelocity);
-        if (goalInSight && launcherState == -1) {
+        if (goalInSight && launcherState == -1 && gamepad2.right_trigger > 0.5) {
             launcherState = 0;
         }
         switch (launcherState) {

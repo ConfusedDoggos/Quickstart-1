@@ -2,6 +2,7 @@ package org.firstinspires.ftc.teamcode.meet1;
 
 import static org.firstinspires.ftc.teamcode.meet1.Meet1Teleop.intakeLoadSpeed;
 import static org.firstinspires.ftc.teamcode.meet1.Meet1Teleop.shooterVelocityGap;
+import static org.firstinspires.ftc.teamcode.pedroPathing.Tuning.follower;
 
 import com.bylazar.configurables.annotations.Configurable;
 import com.bylazar.configurables.annotations.IgnoreConfigurable;
@@ -38,28 +39,27 @@ public class Meet1Auto extends LinearOpMode {
 
     //Pedro Variables
     private Pose currentPose;
-    private Follower follower;
 
     //Timer
     private final ElapsedTime runtime = new ElapsedTime();
 
     //Panels Editable Variables
-    public static double PPGIntakeX = 16;
-    public static double PGPINtakeX = 9;
+    public static double PPGIntakeX = 18;
+    public static double PGPINtakeX = 12;
 
-    //Imported Variables (So only teleop has to be tuned)
-    public double kp = Meet1Teleop.kp;
-    public double ki = Meet1Teleop.ki;
-    public double kd = Meet1Teleop.kd;
+    public static double kp = 0.7;
+    public static double ki = 300;
+    public static double kd = 0;
 
     //PedroPathing Poses
-    private final Pose startPose = new Pose(33, 135, Math.toRadians(90)); // Start Pose of our robot.
+    private final Pose startPose = new Pose(32.5, 135.5, Math.toRadians(90)); // Start Pose of our robot.
     private final Pose scorePose = new Pose(48, 96, Math.toRadians(135)); // Scoring Pose of our robot. It is facing the goal at a 135 degree angle.
-    private final Pose PPGPose = new Pose(46, 83.5, Math.toRadians(180)); // Highest (First Set) of Artifacts from the Spike Mark.
+    private final Pose PPGPose = new Pose(46, 85.5, Math.toRadians(180)); // Highest (First Set) of Artifacts from the Spike Mark.
     private final Pose PPGPickupPose = new Pose(PPGIntakeX, PPGPose.getY(),PPGPose.getHeading()); // Where to drive to while intaking PPG
-    private final Pose PGPPose = new Pose(46, 59.5, Math.toRadians(180)); // Middle (Second Set) of Artifacts from the Spike Mark.
+    private final Pose PGPPose = new Pose(46, 62.5, Math.toRadians(180)); // Middle (Second Set) of Artifacts from the Spike Mark.
     private final Pose PGPPickupPose = new Pose(PGPINtakeX, PGPPose.getY(),PGPPose.getHeading()); // WHere to drive to while intaking PGP
-    private final Pose PGPToScoreControlPoint = new Pose(50,60); // Control point to define bezier curve
+    private final Pose PGBBackPose = new Pose(40, PGPPickupPose.getY(), PGPPickupPose.getHeading());
+    private final Pose PGPToScoreControlPoint = new Pose(50,40); // Control point to define bezier curve
     private final Pose parkPose = new Pose(40,70,Math.toRadians(135)); // Final position to exit launch zone
 
     //PedroPathing PathChains
@@ -69,15 +69,16 @@ public class Meet1Auto extends LinearOpMode {
     private PathChain PPGIntakeToScore;
     private PathChain scoreToPGP;
     private PathChain PGPToIntake;
+    private PathChain PGPIntakeBack;
     private PathChain PGPIntakeToScore;
     private PathChain scoreToPark;
 
     //Changing variables
     public int autoState = 0;
-    public double shooterInput = 0;
-    public int launcherState = 0;
+    public double shooterInput;
+    public int launcherState = -1;
     private int ballsLaunched = 0;
-    private boolean sequenceFinished = true;
+    private boolean sequenceFinished = false;
     private boolean launchArtifacts = false;
     private double shooterStartTime;
 
@@ -118,14 +119,19 @@ public class Meet1Auto extends LinearOpMode {
 
             autoStateMachine(); //Overall state machine function to simplify code
 
-            updateShooterSpeed(); // Ensures that PID is always updating for motor power
-
             autoLaunchSequence(); // Ensures that launch sequence will occur when necessary
 
-            telemetryM.addData("Elapsed",runtime.toString());
+            updateShooterSpeed(); // Ensures that PID is always updating for motor power
+
+
+//            telemetryM.addData("Elapsed",runtime.toString());
             telemetryM.addData("X",currentPose.getX());
             telemetryM.addData("Y",currentPose.getY());
             telemetryM.addData("Heading",currentPose.getHeading());
+            telemetryM.addData("Launcher State",launcherState);
+            telemetryM.addData("Shooter Input",shooterInput);
+            telemetryM.addData("Balls launched",ballsLaunched);
+            telemetryM.addData("Motor Velocity",launcherMotors.getVelocity());
             telemetryM.update();
         }
     }
@@ -194,24 +200,30 @@ public class Meet1Auto extends LinearOpMode {
                     resetMotors(); // Disable intake/launcher
                     rejectArtifacts(); // Run launcher backwards to push out stuck artifacts
                     follower.setMaxPower(1); // Back to max speed
-                    follower.followPath(PGPIntakeToScore); // Go back to scoring position
+                    follower.followPath(PGPIntakeBack); // Go back to scoring position
                     autoState=9;
                 }
                 break;
             case 9:
-                if (!follower.isBusy()) { // Once move is complete
-                    scoreArtifacts(); // Launcher procedure
+                if (!follower.isBusy()) {
+                    follower.followPath(PGPIntakeToScore);
                     autoState=10;
                 }
                 break;
             case 10:
-                if (sequenceFinished) { //If shooter is finished
-                    sequenceFinished = false; // Reset variable
-                    follower.followPath(scoreToPark); // Go to parking position
+                if (!follower.isBusy()) { // Once move is complete
+                    scoreArtifacts(); // Launcher procedure
                     autoState=11;
                 }
                 break;
-            case 11: //resetting or any other things necessary before autonomous ends
+            case 11:
+                if (sequenceFinished) { //If shooter is finished
+                    sequenceFinished = false; // Reset variable
+                    follower.followPath(scoreToPark); // Go to parking position
+                    autoState=12;
+                }
+                break;
+            case 12: //resetting or any other things necessary before autonomous ends
                 resetMotors();
                 autoState=-1;
                 break;
@@ -242,11 +254,10 @@ public class Meet1Auto extends LinearOpMode {
                 break;
             case 0:
                 launcherState = 1;
-                shooterStartTime = runtime;
                 break;
             case 1:
                 //check if launcher is up to speed
-                launcherMotors.set(motorTargetSpeed);
+                shooterInput = motorTargetSpeed;
                 if (Math.abs(launcherMotors.getVelocity()) >= motorTargetVelocity-shooterVelocityGap) {
                     intakeMotor.set(intakeLoadSpeed);
                     launcherState = 2;
@@ -254,17 +265,18 @@ public class Meet1Auto extends LinearOpMode {
                 break;
             case 2:
                 //Check if launcher is below speed by a significant amount
-                launcherMotors.set(motorTargetSpeed);
+                shooterInput = motorTargetSpeed;
                 if (Math.abs(launcherMotors.getVelocity()) <= motorTargetVelocity-shooterVelocityGap*1.5) {
                     intakeMotor.set(0);
                     ballsLaunched+=1;
                     launcherState=1;
+                    if (ballsLaunched==3 /*|| (runtime.seconds()-shooterStartTime) > 5*/) {
+                        launcherState = 3;
+                        ballsLaunched=0;
+                        sequenceFinished = true;
+                    }
                 }
-                if (ballsLaunched==3 || (runtime-shooterStartTime) > 5) {
-                    launcherState = 3;
-                    ballsLaunched=0;
-                    sequenceFinished = true;
-                }
+
                 break;
             case 3:
                 resetMotors();
@@ -336,6 +348,7 @@ public class Meet1Auto extends LinearOpMode {
         intakeMotor = new MotorEx(hardwareMap,"intakeMotor", Motor.GoBILDA.RPM_435);
         launcher1 = new MotorEx(hardwareMap,"shooterMotor1", Motor.GoBILDA.BARE);
         launcher2 = new MotorEx(hardwareMap,"shooterMotor2", Motor.GoBILDA.BARE);
+        launcher2.setInverted(true);
         launcher1.setRunMode(Motor.RunMode.VelocityControl);
         launcher1.setVeloCoefficients(kp,ki,kd);
         launcher2.setRunMode(Motor.RunMode.VelocityControl);
@@ -368,8 +381,12 @@ public class Meet1Auto extends LinearOpMode {
                 .addPath(new BezierLine(PGPPose,PGPPickupPose))
                 .setLinearHeadingInterpolation(PGPPose.getHeading(),PGPPickupPose.getHeading())
                 .build();
+        PGPIntakeBack = follower.pathBuilder()
+                .addPath(new BezierLine(PGPPickupPose,PGBBackPose))
+                .setLinearHeadingInterpolation(PGPPose.getHeading(),PGPPose.getHeading())
+                .build();
         PGPIntakeToScore = follower.pathBuilder()
-                .addPath(new BezierCurve(PGPPickupPose,scorePose,PGPToScoreControlPoint))
+                .addPath(new BezierLine(PGBBackPose,scorePose))
                 .setLinearHeadingInterpolation(PGPPickupPose.getHeading(),scorePose.getHeading())
                 .build();
         scoreToPark = follower.pathBuilder()
