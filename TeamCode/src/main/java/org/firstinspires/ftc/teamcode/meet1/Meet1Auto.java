@@ -42,7 +42,7 @@ public class Meet1Auto extends LinearOpMode {
 
     //Panels Editable Variables
     public static double PPGIntakeX = 18;
-    public static double PGPINtakeX = 12;
+    public static double PGPIntakeX = 12;
 
     public static double kp = 0.7;
     public static double ki = 300;
@@ -54,7 +54,7 @@ public class Meet1Auto extends LinearOpMode {
     private final Pose PPGPose = new Pose(46, 85.5, Math.toRadians(180)); // Highest (First Set) of Artifacts from the Spike Mark.
     private final Pose PPGPickupPose = new Pose(PPGIntakeX, PPGPose.getY(),PPGPose.getHeading()); // Where to drive to while intaking PPG
     private final Pose PGPPose = new Pose(46, 62.5, Math.toRadians(180)); // Middle (Second Set) of Artifacts from the Spike Mark.
-    private final Pose PGPPickupPose = new Pose(PGPINtakeX, PGPPose.getY(),PGPPose.getHeading()); // WHere to drive to while intaking PGP
+    private final Pose PGPPickupPose = new Pose(PGPIntakeX, PGPPose.getY(),PGPPose.getHeading()); // WHere to drive to while intaking PGP
     private final Pose PGBBackPose = new Pose(40, PGPPickupPose.getY(), PGPPickupPose.getHeading());
     private final Pose PGPToScoreControlPoint = new Pose(50,40); // Control point to define bezier curve
     private final Pose parkPose = new Pose(40,70,Math.toRadians(135)); // Final position to exit launch zone

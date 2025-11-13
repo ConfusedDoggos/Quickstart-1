@@ -65,8 +65,8 @@ public class Meet1Teleop extends LinearOpMode {
     public static double dtSpeedNormal = 1.0;
     public static double dtSpeedSlow = 0.5;
     public static double intakeSpeed = 0.9;
-    public static double intakeRejectSpeed = 0.3;
-    public static double launcherRejectSpeed = 0.7;
+    public static double intakeRejectSpeed = -0.3;
+    public static double launcherRejectSpeed = -0.4;
 
     //ShooterMethod variables
     public boolean shootingStarted;
@@ -111,6 +111,7 @@ public class Meet1Teleop extends LinearOpMode {
     private int ballsLaunched = 0;
     private int launcherState = -1;
     private boolean goalInSight = false;
+    private double shooterInputSpeed;
 
 
     private double goalRange;
@@ -164,9 +165,8 @@ public class Meet1Teleop extends LinearOpMode {
                 //Activates automatic launching sequence when necessary
                 autoLaunchMethod();
 
-                if (gamepad2.dpad_left) {
-                    launcherMotors.set(testSpeed);
-                }
+                updateShooterSpeed();
+
                 //Update telemetry for FTCControl Panels
                 List<Double> velocities = launcherMotors.getVelocities();
                 telemetryM.addData("Left Flywheel Velocity", velocities.get(0));
@@ -183,9 +183,6 @@ public class Meet1Teleop extends LinearOpMode {
                 telemetryM.update(telemetry);
                 // Share the CPU.
 
-//                if (cameraActive) {
-//                    sleep(20);
-//                }
             }
         }
 
@@ -293,6 +290,11 @@ public class Meet1Teleop extends LinearOpMode {
 //
 //    }   // end method telemetryAprilTag()
 
+
+    private void updateShooterSpeed() { // Always updating PID
+        launcherMotors.set(shooterInputSpeed);
+    }
+
     private void updateMotorVel() {
         double trueDeadzone;
         if (gamepad1.left_trigger > 0.2) {
@@ -368,7 +370,7 @@ public class Meet1Teleop extends LinearOpMode {
 
     private void shooterTeleOp() {
         if (Math.abs(gamepad2.left_stick_x) > 0.1) {
-            launcherMotors.set(gamepad2.left_stick_x);
+            shooterInputSpeed = gamepad2.left_stick_x;
         }
         if (gamepad2.right_stick_button) {
             deactivateBallLauncher();
@@ -389,17 +391,14 @@ public class Meet1Teleop extends LinearOpMode {
         } else if (gamepad2.b) {
             intakeMotor.set(0);
         } else if (gamepad2.y) {
-            intakeMotor.set(-intakeRejectSpeed);
+            intakeMotor.set(intakeRejectSpeed);
         }
         if (gamepad2.x && intakeResetToggle) {
             intakeResetToggle = false;
-            intakeMotor.set(-intakeRejectSpeed);
-            launcherMotors.set(-launcherRejectSpeed);
-            try {
-                Thread.sleep(200);
-            } catch (InterruptedException ie) {
-                Thread.currentThread().interrupt();
-            }
+            intakeMotor.set(intakeRejectSpeed);
+            shooterInputSpeed = launcherRejectSpeed;
+        }
+        if (launcherMotors.getVelocity() < shooterVelocityLUT.get(-launcherRejectSpeed)+shooterVelocityGap && !intakeResetToggle) {
             intakeMotor.set(0);
             deactivateBallLauncher();
             intakeResetToggle = true;
@@ -423,7 +422,7 @@ public class Meet1Teleop extends LinearOpMode {
                 break;
             case 1:
                 //check if launcher is up to speed
-                launcherMotors.set(motorTargetSpeed);
+                shooterInputSpeed = motorTargetSpeed;
                 if (Math.abs(launcherMotors.getVelocity()) >= motorTargetVelocity-shooterVelocityGap) {
                     intakeMotor.set(intakeLoadSpeed);
                     launcherState = 2;
@@ -431,7 +430,7 @@ public class Meet1Teleop extends LinearOpMode {
                 break;
             case 2:
                 //Check if launcher is below speed by a significant amount
-                launcherMotors.set(motorTargetSpeed);
+                shooterInputSpeed = motorTargetSpeed;
                 if (Math.abs(launcherMotors.getVelocity()) <= motorTargetVelocity-shooterVelocityGap*1.5) {
                     intakeMotor.set(0);
                     ballsLaunched+=1;
