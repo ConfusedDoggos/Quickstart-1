@@ -43,6 +43,7 @@ public class Meet1Auto extends LinearOpMode {
     //Panels Editable Variables
     public static double PPGIntakeX = 18;
     public static double PGPIntakeX = 12;
+    public static double intakeMaxPower = 0.35;
 
     public static double kp = 0.7;
     public static double ki = 300;
@@ -159,7 +160,7 @@ public class Meet1Auto extends LinearOpMode {
             case 3:
                 if (!follower.isBusy()) { //Once move is finished
                     intakeArtifacts(); // Activate intake
-                    follower.setMaxPower(0.5); // Move slower?
+                    follower.setMaxPower(intakeMaxPower); // Move slower?
                     follower.followPath(PPGToIntake); // Move forwards while intaking
                     autoState=4;
                 }
@@ -188,7 +189,7 @@ public class Meet1Auto extends LinearOpMode {
                 break;
             case 7:
                 if (!follower.isBusy()) {
-                    follower.setMaxPower(0.5); // Go slower?
+                    follower.setMaxPower(intakeMaxPower); // Go slower?
                     intakeArtifacts(); // Activate intake
                     follower.followPath(PGPToIntake); // Move forwards while intaking
                     autoState=8;
