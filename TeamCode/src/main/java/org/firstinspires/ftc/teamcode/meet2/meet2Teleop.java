@@ -58,7 +58,7 @@ import java.util.List;
 @TeleOp(name = "Meet 2 Teleop", group = "2: Meet 2")
 @Configurable
 @Disabled
-public class V2Teleop extends LinearOpMode {
+public class Meet2Teleop extends LinearOpMode {
     private static final boolean USE_WEBCAM = true;  // true for webcam, false for phone camera
     public static int deadzone = 30;
     public static double turnSpeed = .5;
