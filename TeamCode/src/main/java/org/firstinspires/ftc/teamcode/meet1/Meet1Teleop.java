@@ -107,6 +107,7 @@ public class Meet1Teleop extends LinearOpMode {
     public InterpLUT shooterInputLUT = new InterpLUT();
     public InterpLUT shooterVelocityLUT = new InterpLUT();
     private ElapsedTime teleTimer;
+    private boolean blindFire = false;
 
     private int ballsLaunched = 0;
     private int launcherState = -1;
@@ -167,6 +168,7 @@ public class Meet1Teleop extends LinearOpMode {
 
                 updateShooterSpeed();
 
+
                 //Update telemetry for FTCControl Panels
                 List<Double> velocities = launcherMotors.getVelocities();
                 telemetryM.addData("Left Flywheel Velocity", velocities.get(0));
@@ -177,7 +179,6 @@ public class Meet1Teleop extends LinearOpMode {
                 telemetryM.addData("MotorVelocityAttempt",launcherMotors.get());
                 telemetryM.addData("Balls Launched",ballsLaunched);
                 telemetryM.addData("Launcher State",launcherState);
-
                 timer.end();
                 //graphM.update();
                 telemetryM.update(telemetry);
@@ -219,10 +220,21 @@ public class Meet1Teleop extends LinearOpMode {
 
         //Add values (obtained empirically)
         //Input is distance, output is shooter velocity
+        shooterInputLUT.add(30,0.5);
+        shooterInputLUT.add(39,0.53);
         shooterInputLUT.add(46.3,0.55);
         shooterInputLUT.add(52.6,0.605);
-        shooterInputLUT.add(61.2,0.65);
-        shooterInputLUT.add(76.54,0.67);
+        shooterInputLUT.add(61.2,0.63);
+        shooterInputLUT.add(76.54,0.6);
+        //shooterInputLUT.add(104,0.85);
+
+        /*
+        shooterInputLUT.add(95,);
+        shooterInputLUT.add(100,);
+        shooterInputLUT.add(105,);
+        shooterInputLUT.add(110,);
+         */
+
         shooterInputLUT.createLUT();
         //May need to create separate LUT for far zone, unsure if will be necessary or not.
         shooterVelocityLUT.add(-1,-1900);
@@ -250,7 +262,7 @@ public class Meet1Teleop extends LinearOpMode {
     }
 
     private double calculateShooterPower(double distance) {
-        if (distance > 46.3 && distance < 75) {
+        if (distance > 30.5 && distance < 75) {
             return shooterInputLUT.get(distance);
         } else {
             return 0;
@@ -292,7 +304,11 @@ public class Meet1Teleop extends LinearOpMode {
 
 
     private void updateShooterSpeed() { // Always updating PID
-        launcherMotors.set(shooterInputSpeed);
+        if (shooterInputSpeed != 0) {
+            launcherMotors.set(shooterInputSpeed);
+        } else {
+            launcherMotors.stopMotor();
+        }
     }
 
     private void updateMotorVel() {
@@ -376,12 +392,17 @@ public class Meet1Teleop extends LinearOpMode {
             deactivateBallLauncher();
             intakeMotor.set(0);
             launcherState = -1;
+            blindFire=false;
         }
         if (gamepad2.dpad_up) {
             if (launcherState == -1) {
                 launcherState = 0;
                 goalRange = 50;
             }
+        }
+        if (gamepad2.dpad_left) {
+            blindFire = true;
+            goalRange=50;
         }
     }
 
@@ -397,12 +418,18 @@ public class Meet1Teleop extends LinearOpMode {
             intakeResetToggle = false;
             intakeMotor.set(intakeRejectSpeed);
             shooterInputSpeed = launcherRejectSpeed;
-        }
-        if (launcherMotors.getVelocity() < shooterVelocityLUT.get(-launcherRejectSpeed)+shooterVelocityGap && !intakeResetToggle) {
+            try {
+                Thread.sleep(200);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
             intakeMotor.set(0);
-            deactivateBallLauncher();
             intakeResetToggle = true;
+
         }
+
+
+
     }
 
     private void autoLaunchMethod() {
@@ -413,6 +440,9 @@ public class Meet1Teleop extends LinearOpMode {
         telemetryM.addData("Motor Velocity Target",motorTargetVelocity);
         if (goalInSight && launcherState == -1 && gamepad2.right_trigger > 0.5) {
             launcherState = 0;
+        }
+        if (blindFire && launcherState == -1) {
+            launcherState=0;
         }
         switch (launcherState) {
             case -1:
@@ -439,6 +469,7 @@ public class Meet1Teleop extends LinearOpMode {
                 if (ballsLaunched==3) {
                     launcherState = 3;
                     ballsLaunched=0;
+                    blindFire=false;
                 }
                 break;
             case 3:
@@ -454,7 +485,7 @@ public class Meet1Teleop extends LinearOpMode {
         launcherMotors.set(shooterSpeed);
     }
     private void deactivateBallLauncher() {
-        launcherMotors.stopMotor();
+        shooterInputSpeed = 0;
     }
 
 

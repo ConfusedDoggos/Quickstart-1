@@ -41,11 +41,12 @@ public class Meet1Auto extends LinearOpMode {
 
     //Panels Editable Variables
     public static double PPGIntakeX = 15.5;
-    public static double PGPIntakeX = 9.0;
-    public static double GPPIntakeX = 9.0;
+    public static double PGPIntakeX = 12;
+    public static double GPPIntakeX = 12;
     public static double intakeMaxPower = 0.3;
     public static double shooterSpeedGap = 81;
-    public static double shootDistance = 50;
+    public static double shootDistance = 52;
+    public static double startingYOffset=0;
 
     public static double kp = 0.7;
     public static double ki = 300;
@@ -99,34 +100,44 @@ public class Meet1Auto extends LinearOpMode {
     @Override
     public void runOpMode() {
         telemetryM = PanelsTelemetry.INSTANCE.getTelemetry(); // Panels telemetry
+        initMotors(); //Initializes subsystem motors
+        buildTables(); //Initialize lookup tables
+
+
+
+
+
+
+
+
 
         //Initialize PP Follower
         follower= Constants.createFollower(hardwareMap);
-        follower.setStartingPose(startPose);
+        while (!isStarted()) {
+            if (gamepad1.a) {
+                definePoses(true);
+                telemetryM.addData("Red alliance Auto",0);
+                autoInitialized = true;
+            } else if (gamepad1.b) {
+                definePoses(false);
+                telemetryM.addData("Blue alliance Auto",0);
+                autoInitialized = true;
+            }
+            if (!autoInitialized) {
+                telemetryM.addData("AUTO NOT INITIALIZED!!!",autoInitialized);
+            }
+            telemetryM.update();
+        }
 
-        initMotors(); //Initializes subsystem motors
+
         buildPaths(); //Initialize all Pedro Paths
-        buildTables(); //Initialize lookup tables
+
+        follower.setStartingPose(startPose);
 
         List<LynxModule> hubs = hardwareMap.getAll(LynxModule.class);
         hubs.forEach(hub -> hub.setBulkCachingMode(LynxModule.BulkCachingMode.MANUAL)); //Bulk read to reduce loop time
 
-        while (!opModeIsActive()) {
-            if (gamepad1.a) {
-                definePoses(true);
-                telemetry.addLine("Red alliance Auto");
-                telemetry.update();
-                autoInitialized = true;
-            } else if (gamepad1.b) {
-                definePoses(false);
-                telemetry.addLine("Blue alliance Auto");
-                telemetry.update();
-                autoInitialized = true;
-            }
-            if (!autoInitialized) {
-                telemetry.addLine("AUTO NOT INITIALIZED!!!");
-            }
-        }
+        waitForStart();
 
         sinceLastBall.reset();
         autoTimer.reset();
@@ -194,7 +205,7 @@ public class Meet1Auto extends LinearOpMode {
             case 4:
                 if (!follower.isBusy()) {
                     try {
-                        Thread.sleep(500);
+                        Thread.sleep(250);
                     } catch (InterruptedException e) {
                         Thread.currentThread().interrupt();
                     }
@@ -220,7 +231,7 @@ public class Meet1Auto extends LinearOpMode {
                 break;
             case 7:
                 if (!follower.isBusy()) {
-                    follower.setMaxPower(intakeMaxPower); // Go slower?
+                    follower.setMaxPower(intakeMaxPower-0.1); // Go slower?
                     intakeArtifacts(); // Activate intake
                     follower.followPath(PGPToIntake); // Move forwards while intaking
                     autoState=8;
@@ -307,7 +318,7 @@ public class Meet1Auto extends LinearOpMode {
 
     public void intakeArtifacts() { //Just turn on intake, maybe also run launcher in reverse to try to reject balls
         intakeMotor.set(1);
-        shooterInput=-0.3;
+        shooterInput=-0.5;
     }
 
     public void scoreArtifacts() {
@@ -339,6 +350,13 @@ public class Meet1Auto extends LinearOpMode {
                 shooterInput = motorTargetSpeed;
                 sinceLastBall.reset();
                 if (Math.abs(launcherMotors.getVelocity()) >= motorTargetVelocity-shooterSpeedGap) {
+                    if (ballsLaunched == 0) {
+                        try {
+                            Thread.sleep(150);
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                        }
+                    }
                     intakeMotor.set(intakeLoadSpeed);
                     launcherState = 2;
                 }
@@ -370,7 +388,8 @@ public class Meet1Auto extends LinearOpMode {
     }
 
     public void rejectArtifacts() { //Launcher spinning in reverse to try to launch all 3 balls once arriving at destination
-        shooterInput = -0.3;
+        shooterInput = -0.5;
+        intakeMotor.set(-0.05);
     }
 
     public void resetMotors() { //Set intake and shooter to 0 when they aren't supposed to be active
@@ -383,7 +402,7 @@ public class Meet1Auto extends LinearOpMode {
     }
 
     private double calculateShooterPower(double distance) {
-        if (distance > 46.3 && distance < 75) {
+        if (distance > 30.5 && distance < 75) {
             return shooterInputLUT.get(distance);
         } else {
             return 0;
@@ -398,10 +417,13 @@ public class Meet1Auto extends LinearOpMode {
 
         //Add values (obtained empirically)
         //Input is distance, output is shooter velocity
+        shooterInputLUT.add(30,0.5);
+        shooterInputLUT.add(39,0.53);
         shooterInputLUT.add(46.3,0.55);
         shooterInputLUT.add(52.6,0.605);
         shooterInputLUT.add(61.2,0.65);
         shooterInputLUT.add(76.54,0.67);
+
         shooterInputLUT.createLUT();
         //May need to create separate LUT for far zone, unsure if will be necessary or not.
         shooterVelocityLUT.add(-1,-1900);
@@ -507,7 +529,7 @@ public class Meet1Auto extends LinearOpMode {
             Xorigin = 0;
         }
 
-        startPose = new Pose(Xorigin+signSwap*32.5, 135.5, Math.toRadians(90)); // Start Pose of our robot.
+        startPose = new Pose(Xorigin+signSwap*32.5, 135.5+startingYOffset, Math.toRadians(90)); // Start Pose of our robot.
         scorePose = new Pose(Xorigin+signSwap*48, 96, Math.toRadians(135-transform135)); // Scoring Pose of our robot. It is facing the goal at a 135 degree angle.
         PPGPose = new Pose(Xorigin+signSwap*46, 85.5, Math.toRadians(180-transform180)); // Highest (First Set) of Artifacts from the Spike Mark.
         PPGPickupPose = new Pose(Xorigin+signSwap*PPGIntakeX, PPGPose.getY(),PPGPose.getHeading()); // Where to drive to while intaking PPG
