@@ -66,6 +66,7 @@ public class Meet2TeleOp extends LinearOpMode {
     //DT Variables
     private double driveInput, strafeInput, turnInput;
     private double driveAngleDegrees = 0;
+    private double DELETETHIS;
 
     //Launcher Variables
     public static double kp = 1;
