@@ -76,19 +76,20 @@ public class Meet2TeleOp extends LinearOpMode {
     public static double kv = 0;
     private double launcherTargetVelocity;
     private double ballsLaunched;
-    public static double launcherTestSpeed = 0.66;
+    public static double launcherTestSpeed = 0.7;
     public static double spinUpSpeed = 0.6;
 
     //Intake Variables
-    public static double intakePickupSpeed = 1;
-    public static double transferLoadSpeed = .8;
+    public static double intakePickupSpeed = .6;
+    public static double transferLoadSpeed = .6;
     public static double intakeRejectSpeed = -0.5;
 
     //Turret Variables
     private PIDFController turretPIDF;
-    public static double tkP = 5;
-    public static double tkI = 100;
-    public static double tkD = 0.0001;
+    public static double tkP = 1.5;
+    public static double tkI = 0;
+    public static double tkD = 0;
+    public static double tkS = 2;
     private boolean targetFound = false;
     private int turretTargetPos;
     private double angleError;
@@ -180,9 +181,9 @@ public class Meet2TeleOp extends LinearOpMode {
         launcher2.setRunMode(Motor.RunMode.VelocityControl);
         drive = new MecanumDrive(fL, fR, bL, bR);
         drive.setRightSideInverted(true);
-        turretPIDF = new PIDController(tkP, tkI, tkD);
-        turretPIDF.setTolerance(8);
-        turret.setCachingTolerance(0.08);
+        turretPIDF = new PIDFController(tkP, tkI, tkD,tkS);
+        turretPIDF.setTolerance(1,20);
+        turret.setCachingTolerance(0.01);
         launcher = new MotorGroup(launcher1, launcher2);
     }
 
@@ -271,6 +272,8 @@ public class Meet2TeleOp extends LinearOpMode {
             turretTargetPos = turretAngleToTicks(45);
         } else if (gamepad2.dpad_right) {
             turretTargetPos = turretAngleToTicks(-45);
+        } else if (gamepad2.left_stick_button) {
+            turretTargetPos = turretAngleToTicks(0);
         }
         if (gamepad2.dpad_up) {
             turretState = "tracking";
