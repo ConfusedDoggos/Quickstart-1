@@ -27,7 +27,7 @@ import org.opencv.core.Point;
 
 
 @Autonomous(name = "Meet 0 Auto", group = "0: Meet 0")
-@Configurable
+//@Configurable
 @Disabled
 
 public class Meet0Auto extends LinearOpMode {

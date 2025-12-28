@@ -12,6 +12,7 @@ import com.pedropathing.geometry.Pose;
 import com.pedropathing.paths.PathChain;
 import com.qualcomm.hardware.lynx.LynxModule;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.util.ElapsedTime;
 import com.seattlesolvers.solverslib.hardware.motors.Motor;
@@ -22,9 +23,9 @@ import com.seattlesolvers.solverslib.util.InterpLUT;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
 import java.util.List;
-
+@Disabled
 @Autonomous(name = "Meet 1 Auto", group = "Autonomous")
-@Configurable // Panels
+//@Configurable // Panels
 @SuppressWarnings("FieldCanBeLocal") // Stop Android Studio from bugging about variables being predefined
 public class Meet1Auto extends LinearOpMode {
 
@@ -103,14 +104,6 @@ public class Meet1Auto extends LinearOpMode {
         initMotors(); //Initializes subsystem motors
         buildTables(); //Initialize lookup tables
 
-
-
-
-
-
-
-
-
         //Initialize PP Follower
         follower= Constants.createFollower(hardwareMap);
         while (!isStarted()) {
@@ -126,7 +119,7 @@ public class Meet1Auto extends LinearOpMode {
             if (!autoInitialized) {
                 telemetryM.addData("AUTO NOT INITIALIZED!!!",autoInitialized);
             }
-            telemetryM.update();
+            telemetryM.update(telemetry);
         }
 
 
