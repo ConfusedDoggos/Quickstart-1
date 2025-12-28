@@ -55,7 +55,7 @@ import java.util.List;
 
 @Disabled
 @TeleOp(name = "Meet 1 Teleop")
-@Configurable
+//@Configurable
 public class Meet1Teleop extends LinearOpMode {
 
 

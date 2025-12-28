@@ -16,6 +16,7 @@ import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.util.ElapsedTime;
 import com.seattlesolvers.solverslib.controller.PIDController;
 import com.seattlesolvers.solverslib.controller.PIDFController;
+import com.seattlesolvers.solverslib.controller.wpilibcontroller.SimpleMotorFeedforward;
 import com.seattlesolvers.solverslib.drivebase.MecanumDrive;
 import com.seattlesolvers.solverslib.hardware.motors.Motor;
 import com.seattlesolvers.solverslib.hardware.motors.MotorEx;
@@ -59,6 +60,7 @@ public class Meet2TeleOp extends LinearOpMode {
     private String team = "blue";
     private double goalID = 20;
     private Pose startPose;
+    private Pose goalPose;
 
     //Lookup Tables
     private InterpLUT velocityLUT = new InterpLUT(), rangeLUT= new InterpLUT();
@@ -89,7 +91,8 @@ public class Meet2TeleOp extends LinearOpMode {
     public static double tkP = 1.5;
     public static double tkI = 0;
     public static double tkD = 0;
-    public static double tkS = 2;
+    public static double tkS = 0;
+    public static double errorTotal = 0.1;
     private boolean targetFound = false;
     private int turretTargetPos;
     private double angleError;
@@ -182,8 +185,9 @@ public class Meet2TeleOp extends LinearOpMode {
         drive = new MecanumDrive(fL, fR, bL, bR);
         drive.setRightSideInverted(true);
         turretPIDF = new PIDFController(tkP, tkI, tkD,tkS);
-        turretPIDF.setTolerance(1,20);
-        turret.setCachingTolerance(0.01);
+        //turretPIDF.setTolerance(1,0);
+        //turret.setCachingTolerance(0.01);
+        turretPIDF.setIntegrationBounds(-errorTotal,errorTotal);
         launcher = new MotorGroup(launcher1, launcher2);
     }
 
@@ -403,10 +407,10 @@ public class Meet2TeleOp extends LinearOpMode {
 
         //Add values (obtained empirically)
         //Input is distance, output is shooter velocity
-        rangeLUT.add(30,0.6);
-        rangeLUT.add(35,.66);
-
+        rangeLUT.add(20,0.7);
+        rangeLUT.add(100,.76);
         rangeLUT.createLUT();
+
         velocityLUT.add(-1,-2300);
         velocityLUT.add(-0.8,-1760);
         velocityLUT.add(-0.7,-1560);
@@ -473,18 +477,30 @@ public class Meet2TeleOp extends LinearOpMode {
     }
     public void turretTrackProcedure() {
         double turretAngle;
-        turretAngle = -driveAngleDegrees + goalOffset;
+        turretAngle = calculateTurretAngle();
         turretAngle = turretAngleLimiter(turretAngle);
         turretTargetPos = turretAngleToTicks(turretAngle);
     }
+    public double calculateTurretAngle() {
+        double botX = currentPose.getX();
+        double botY = currentPose.getY();
+        double botHeading = Math.toDegrees(currentPose.getHeading());
+        double goalX = goalPose.getX();
+        double goalY = goalPose.getY();
+        double targetAngle = Math.toDegrees(Math.atan2(goalY-botY,goalX-botX));
+        targetAngle -= botHeading;
+        telemetryM.addData("Target Angle",targetAngle);
+        return targetAngle;
+    }
+
     public void turretControlLoop() {
         double output = turretPIDF.calculate(turret.getCurrentPosition(),turretTargetPos);
         turret.setVelocity(output);
     }
-
     public int turretAngleToTicks(double angle) {
         return (int) (angle * 978.7 / 360);
     }
+
     public int turretTicksToAngle(double ticks) {
         return (int) (ticks * 360 / 978.7);
     }
@@ -495,6 +511,9 @@ public class Meet2TeleOp extends LinearOpMode {
             realAngle -= 360;
         } else if (realAngle < -180) {
             realAngle += 360;
+        }
+        if (Math.abs(realAngle) > 160) {
+            return realAngle;
         }
         if (realAngle > 120) {
             realAngle = 120;
@@ -508,11 +527,13 @@ public class Meet2TeleOp extends LinearOpMode {
         if (Objects.equals(team,"blue")){
             goalID = 20;
             goalOffset = 135;
-            startPose = new Pose(0,0,Math.toRadians(90)); // placeholder
+            startPose = new Pose(32.5,135.5,Math.toRadians(90)); // placeholder
+            goalPose = new Pose(0,144,Math.toRadians(135));
         } else if (Objects.equals(team,"red")) {
             goalID = 24;
             goalOffset = 45;
-            startPose = new Pose(0,0,Math.toRadians(90)); // placeholder
+            startPose = new Pose(111.5,135.5,Math.toRadians(90)); // placeholder
+            goalPose = new Pose(144,144,Math.toRadians(45));
         }
     }
 }

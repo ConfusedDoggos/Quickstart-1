@@ -25,7 +25,7 @@ import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 import java.util.List;
 @Disabled
 @Autonomous(name = "Meet 1 Auto", group = "Autonomous")
-@Configurable // Panels
+//@Configurable // Panels
 @SuppressWarnings("FieldCanBeLocal") // Stop Android Studio from bugging about variables being predefined
 public class Meet1Auto extends LinearOpMode {
 
