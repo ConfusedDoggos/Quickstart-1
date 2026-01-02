@@ -1,12 +1,13 @@
 package org.firstinspires.ftc.teamcode.meet2;
 
-import static org.firstinspires.ftc.teamcode.meet1.Meet1Teleop.intakeLoadSpeed;
 import static org.firstinspires.ftc.teamcode.pedroPathing.Tuning.follower;
 
 import com.bylazar.configurables.annotations.Configurable;
 import com.bylazar.configurables.annotations.IgnoreConfigurable;
 import com.bylazar.telemetry.PanelsTelemetry;
 import com.bylazar.telemetry.TelemetryManager;
+import com.bylazar.utils.LoopTimer;
+import com.pedropathing.geometry.BezierCurve;
 import com.pedropathing.geometry.BezierLine;
 import com.pedropathing.geometry.Pose;
 import com.pedropathing.paths.PathChain;
@@ -14,7 +15,6 @@ import com.qualcomm.hardware.lynx.LynxModule;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.util.ElapsedTime;
-import com.seattlesolvers.solverslib.controller.PIDController;
 import com.seattlesolvers.solverslib.controller.PIDFController;
 import com.seattlesolvers.solverslib.drivebase.MecanumDrive;
 import com.seattlesolvers.solverslib.hardware.motors.Motor;
@@ -22,11 +22,8 @@ import com.seattlesolvers.solverslib.hardware.motors.MotorEx;
 import com.seattlesolvers.solverslib.hardware.motors.MotorGroup;
 import com.seattlesolvers.solverslib.util.InterpLUT;
 
-import org.firstinspires.ftc.robotcore.external.hardware.camera.BuiltinCameraDirection;
-import org.firstinspires.ftc.robotcore.external.hardware.camera.WebcamName;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 import org.firstinspires.ftc.vision.VisionPortal;
-import org.firstinspires.ftc.vision.apriltag.AprilTagDetection;
 import org.firstinspires.ftc.vision.apriltag.AprilTagProcessor;
 
 import java.util.List;
@@ -45,46 +42,38 @@ public class Meet2Auto extends LinearOpMode {
     private Pose currentPose;
 
     //Timer
-    private final ElapsedTime sinceLastBall = new ElapsedTime(ElapsedTime.Resolution.SECONDS);
+    private final ElapsedTime launchTimer = new ElapsedTime(ElapsedTime.Resolution.SECONDS);
     private final ElapsedTime autoTimer = new ElapsedTime(ElapsedTime.Resolution.SECONDS);
 
     //Panels Editable Variables
     public static double PPGIntakeX = 15.5;
     public static double PGPIntakeX = 12;
     public static double GPPIntakeX = 12;
-    public static double intakeMaxPower = 0.3;
+    public static double intakeMaxPower = 0.5;
     public static double shooterSpeedGap = 81;
     public static double shootDistance = 52;
-    public static double startingYOffset=0;
 
 
-    //PedroPathing Poses
-    private Pose startPose; // Start Pose of our robot.
-    private Pose scorePose; // Scoring Pose of our robot. It is facing the goal at a 135 degree angle.
-    private Pose PPGPose; // Highest (First Set) of Artifacts from the Spike Mark.
-    private Pose PPGPickupPose; // Where to drive to while intaking PPG
-    private Pose PGPPose; // Middle (Second Set) of Artifacts from the Spike Mark.
-    private Pose PGPPickupPose; // WHere to drive to while intaking PGP
-    private Pose PGPToScoreControlPoint; // Control point to define bezier curve
-    private Pose GPPPose; // Lowest (Third Set) of Artifacts from the Spike Mark.
-    private Pose GPPPickupPose; // Drive forwards to intake artifacts
-    private Pose parkPose; // Final position to exit launch zone
 
-    /*
-        private final Pose PGBBackPose = new Pose(40, PGPPickupPose.getY(), PGPPickupPose.getHeading());
-    */
     //PedroPathing PathChains
-    private PathChain startToScore;
-    private PathChain scoreToPPG;
-    private PathChain PPGToIntake;
-    private PathChain PPGIntakeToScore;
-    private PathChain scoreToPGP;
-    private PathChain PGPToIntake;
-    private PathChain PGPIntakeToScore;
-    private PathChain scoreToGPP;
-    private PathChain GPPToIntake;
-    private PathChain GPPIntakeToScore;
-    private PathChain scoreToPark;
+    public Pose startPose;
+    public PathChain StartToScore;
+    public PathChain TurnToPPG;
+    public double ScoreWait1;
+    public PathChain ScoreToPPG;
+    public PathChain PPGToScore;
+    public PathChain TurnToPGP;
+    public double ScoreWait2;
+    public PathChain ScoreToPGP;
+    public PathChain PGPIntake;
+    public PathChain PGPToScore;
+    public double ScoreWait3;
+    public PathChain TurnToGPP;
+    public PathChain ScoreToGPP;
+    public PathChain GPPIntake;
+    public PathChain GPPToScore;
+    public double ScoreWait4;
+    public PathChain Park;
 
     //Changing variables
     public int autoState = 0;
@@ -106,38 +95,38 @@ public class Meet2Auto extends LinearOpMode {
     //Team Dependents
     private String team = "blue";
     private double goalID = 20;
+    private Pose goalPose;
+    private Pose aprilTagPose;
+
     //Lookup Tables
     private InterpLUT velocityLUT = new InterpLUT(), rangeLUT= new InterpLUT();
 
-    //DT Variables
-    private double driveInput, strafeInput, turnInput;
-    private double driveAngleDegrees = 0;
-
     //Launcher Variables
-    public static double kp = 0.5;
+    public static double kp = 1;
     public static double ki = 200;
     public static double kd = 0;
     public static double ks = 0;
     public static double kv = 0;
     private double launcherTargetVelocity;
-    private double ballsLaunched;
-    public static double launcherTestSpeed = 0.60;
-    public static double spinUpSpeed = 0.6;
+    public static double launcherTestSpeed = 0.6;
+    public double odoRange = 0;
 
     //Intake Variables
-    public static double intakePickupSpeed = 1;
+    public static double intakePickupSpeed = .8;
     public static double transferLoadSpeed = .8;
     public static double intakeRejectSpeed = -0.5;
 
     //Turret Variables
     private PIDFController turretPIDF;
-    public static double tkP = 3;
-    public static double tkI = 10;
-    public static double tkD = 0.00001;
+    public static double turretTolerance = 3;
+    public static double tkP = 0.0025;
+    public static double tkI = 0;
+    public static double tkD = 0.00005;
+    public static double tkSCustom = 0.13;
+    public static double errorTotal = 30;
     private boolean targetFound = false;
     private int turretTargetPos;
     private double angleError;
-    private boolean goalVisible = false;
     private double goalOffset;
     private boolean turretAimed = false;
     private boolean turretManualControl = false;
@@ -150,6 +139,7 @@ public class Meet2Auto extends LinearOpMode {
     @Override
     public void runOpMode() {
         telemetryM = PanelsTelemetry.INSTANCE.getTelemetry(); // Panels telemetry
+        LoopTimer timer = new LoopTimer();
         initMotors(); //Initializes subsystem motors
         createLUTs(); //Initialize lookup tables
 
@@ -174,9 +164,7 @@ public class Meet2Auto extends LinearOpMode {
         List<LynxModule> hubs = hardwareMap.getAll(LynxModule.class);
         hubs.forEach(hub -> hub.setBulkCachingMode(LynxModule.BulkCachingMode.MANUAL)); //Bulk read to reduce loop time
 
-        waitForStart();
-
-        sinceLastBall.reset();
+        launchTimer.reset();
         autoTimer.reset();
         while (opModeIsActive()) {
 
@@ -184,21 +172,20 @@ public class Meet2Auto extends LinearOpMode {
 
             //Update Pedro follower and Panels
             follower.update();
-            telemetryM.update();
             currentPose = follower.getPose();
 
 
             autoStateMachine(); //Overall state machine function to simplify code
 
-            auto();
+            auto(); //All hardware
 
 //            telemetryM.addData("Elapsed",runtime.toString());
             telemetryM.addData("X",currentPose.getX());
             telemetryM.addData("Y",currentPose.getY());
             telemetryM.addData("Heading",currentPose.getHeading());
+            telemetryM.addData("Auto State",autoState);
             telemetryM.addData("Launcher State",launcherState);
-            telemetryM.addData("Balls launched",ballsLaunched);
-            telemetryM.addData("Launcher Timer",sinceLastBall);
+            telemetryM.addData("Launcher Timer", launchTimer);
             telemetryM.update();
         }
     }
@@ -215,17 +202,22 @@ public class Meet2Auto extends LinearOpMode {
         turret = new MotorEx(hardwareMap,"turretMotor",Motor.GoBILDA.RPM_435);
         turret.resetEncoder();
         launcher2.setInverted(true);
-        launcher = new MotorGroup(launcher1, launcher2);
-        launcher.setVeloCoefficients(kp,ki,kd);
-        launcher.setFeedforwardCoefficients(ks,kv);
+        launcher1.setVeloCoefficients(kp,ki,kd);
+        //launcher1.setFeedforwardCoefficients(ks,kv);
+        launcher2.setVeloCoefficients(kp,ki,kd);
+        //launcher2.setFeedforwardCoefficients(ks,kv);
+        launcher1.setRunMode(Motor.RunMode.VelocityControl);
+        launcher2.setRunMode(Motor.RunMode.VelocityControl);
         drive = new MecanumDrive(fL, fR, bL, bR);
         drive.setRightSideInverted(false);
-        turretPIDF = new PIDController(tkP, tkI, tkD);
-        turretPIDF.setTolerance(8);
-        turret.setCachingTolerance(0.08);
+        turretPIDF = new PIDFController(tkP, tkI, tkD, 0);
+        //turretPIDF.setTolerance(1,0);
+        //turret.setCachingTolerance(0.01);
+        turretPIDF.setIntegrationBounds(-errorTotal,errorTotal);
+        launcher = new MotorGroup(launcher1, launcher2);
     }
 
-    public void initTrackingSoftware() {
+    /*public void initTrackingSoftware() {
         aprilTag = new AprilTagProcessor.Builder().build();
 
         VisionPortal.Builder builder = new VisionPortal.Builder();
@@ -242,97 +234,25 @@ public class Meet2Auto extends LinearOpMode {
 
 
 
-    }
+    }*/
     public void auto() {
-        DTTeleOp();
-        turretTeleOp();
-        launcherTeleOp();
-        intakeTeleOp();
+        DTAuto();
+        turretAuto();
+        launcherAuto();
+        intakeAuto();
     }
 
-    public void DriverInput() {
-        //DT Section
-        double driveSpeedMulti;
-        driveSpeedMulti = 1;
-        if (gamepad1.left_bumper) {
-            driveSpeedMulti = 0.5;
-        }
-        strafeInput = gamepad1.left_stick_x * driveSpeedMulti;
-        driveInput = -gamepad1.left_stick_y * driveSpeedMulti;
-        turnInput = gamepad1.right_stick_x * driveSpeedMulti;
-
-        if (gamepad1.left_stick_button && gamepad1.right_stick_button) {
-            follower.setPose(new Pose(currentPose.getX(),currentPose.getY(),Math.toRadians(90)));
-        }
-
-        //Intake Section
-        if (gamepad2.a) {
-            intakeState = "intaking";
-            launcherState = "rejecting";
-        } else if (gamepad2.y) {
-            intakeState = "rejecting";
-        } else if (gamepad2.b) {
-            intakeState = "idle";
-            if (Objects.equals(launcherState,"rejecting")) {
-                launcherState = "idle";
-            }
-        } else if (gamepad2.left_bumper) {
-            intakeState = "firing";
-        }
-
-        //Launcher Section
-        if (gamepad2.right_bumper && launcherisReady) {
-            launcherState = "beginLaunchSequence";
-        } else if (gamepad2.dpad_up) {
-            launcherState = "testSpeed";
-        } else if (gamepad2.right_stick_button){
-            launcherState = "idle";
-            intakeState = "idle";
-            turretState = "tracking";
-        }
-
-        //Turret Section
-        if (!targetFound && Math.abs(gamepad2.left_stick_x) > 0.1) {
-            turretManualControl = true;
-            turret.setRunMode(Motor.RunMode.RawPower);
-            if (turret.getCurrentPosition() > -275 && gamepad2.left_stick_x < 0) {
-                turret.set(gamepad2.left_stick_x * .4);
-            } else if (turret.getCurrentPosition() < 275 && gamepad2.left_stick_x > 0) {
-                turret.set(gamepad2.left_stick_x * .4);
-            } else {
-                turret.set(0);
-            }
-        } else turretManualControl = false;
-        if (gamepad2.dpad_left) { // test
-            turretTargetPos = turretAngleToTicks(45);
-        } else if (gamepad2.dpad_right) {
-            turretTargetPos = turretAngleToTicks(-45);
-        }
-        if (gamepad2.dpad_up) {
-            turretState = "tracking";
-        } else if (gamepad2.dpad_down) {
-            turretState = "idle";
-        }
-        driveAngleDegrees = Math.toDegrees(currentPose.getHeading());
-    }
-
-    public void DTTeleOp() {
+    public void DTAuto() {
 
         switch (DTState){
             case "idle":
                 DTisReady = true;
                 break;
             case "drive":
-                if (Math.abs(driveInput) < .1) {
-                    driveInput = 0;
-                }
-                if (Math.abs(strafeInput) < .1) {
-                    strafeInput = 0;
-                }
-                drive.driveRobotCentric(strafeInput,driveInput,turnInput);
+                break;
         }
     }
-    public void intakeTeleOp() {
+    public void intakeAuto() {
         switch (intakeState){
             case "idle":
                 intakeisReady = true;
@@ -349,61 +269,65 @@ public class Meet2Auto extends LinearOpMode {
                 break;
         }
     }
-    public void turretTeleOp() {
+    public void turretAuto() {
 
         switch (turretState){
-            case "idle":
-                turretisReady = true;
-                targetFound = false;
-                break;
-            case "tracking": //track goal whenever possible to save on cycle time, or retain a specific angle
-                turretTrackProcedure();
-                turretisReady = true;
-                targetFound = false;
-                break;
-            case "aiming": //Use apriltag to exactly aim at goal and find range to pass into launcher
-                turretisReady = false;
-                turretTargetProcedure();
-                if (Math.abs(angleError) <= 5) {
-                    turretState = "aimed";
-                }
-                break;
-            case "aimed":
-                turretTargetProcedure();
-                if (Math.abs(angleError) >= 5) {
-                    turretState = "aiming";
-                }
-        }
-        if (!turretManualControl) turretControlLoop();
+                case "idle":
+                    turretisReady = true;
+                    targetFound = false;
+                    break;
+                case "tracking": //track goal whenever possible to save on cycle time, or retain a specific angle
+                    turretTrackProcedure();
+                    turretisReady = true;
+                    targetFound = false;
+                    break;
+                case "aiming": //Use apriltag to exactly aim at goal and find range to pass into launcher
+                    turretisReady = false;
+                    turretTargetProcedure();
+                    if (Math.abs(angleError) <= 5) {
+                        turretState = "aimed";
+                    }
+                    break;
+                case "aimed":
+                    turretTargetProcedure();
+                    if (Math.abs(angleError) >= 5) {
+                        turretState = "aiming";
+                    }
+            }
+        turretControlLoop();
     }
-    public void launcherTeleOp() {
+    public void launcherAuto() {
+        double botX = currentPose.getX();
+        double botY = currentPose.getY();
+        double goalX = goalPose.getX();
+        double goalY = goalPose.getY();
         switch (launcherState){
             case "idle":
                 launcherisReady = true;
                 launcher.stopMotor();
-                ballsLaunched = 0;
+                odoRange = Math.hypot(goalX-botX,goalY-botY);
                 break;
             case "testSpeed":
                 launcherTargetVelocity = launcherTestSpeed;
                 launcher.set(launcherTargetVelocity);
                 break;
             case "beginLaunchSequence":
-                launcherSpinUp();
-                // launcher.set(launcherTargetVelocity);
-
+                launcherSpinUp(false);
+                launcher.set(launcherTargetVelocity);
                 launcherisReady = false;
                 launcherState = "aiming";
                 turretState = "aiming";
                 break;
             case "aiming":
-                launcherSpinUp();
+                launcherSpinUp(false);
                 launcher.set(launcherTargetVelocity);
-                if (Math.abs(launcher.getVelocity()) > Math.abs(velocityLUT.get(launcherTargetVelocity)) - 60) {
+                intakeState = "idle";
+                if (Math.abs(launcher.getVelocity()) > Math.abs(velocityLUT.get(launcherTargetVelocity)) - 20) {
                     launcherState = "acc_ready";
                 }
                 break;
             case "acc_ready":
-                launcherSpinUp();
+                launcherSpinUp(false);
                 launcher.set(launcherTargetVelocity);
                 if (Objects.equals(turretState, "aimed")) {
                     intakeState = "firing";
@@ -411,18 +335,16 @@ public class Meet2Auto extends LinearOpMode {
                     break;
                 }
             case "firing":
-                launcherSpinUp();
+                launcherSpinUp(false);
                 launcher.set(launcherTargetVelocity);
-                if (Math.abs(launcher.getVelocity()) < Math.abs(velocityLUT.get(launcherTargetVelocity)) - 100) {
-                    ballsLaunched += 1;
-                    launcherState = "aiming";
+                if (Objects.equals(turretState,"aiming")) {
                     intakeState = "idle";
-                    if (ballsLaunched == 3) {
-                        ballsLaunched = 0;
-                        launcherState = "idle";
-                        turretState = "tracking";
-                    }
+                    launcherState = "aiming";
                 }
+                break;
+            case "preparing":
+                launcherSpinUp(true);
+                launcher.set(launcherTargetVelocity);
                 break;
             case "rejecting":
                 launcherTargetVelocity = -.6;
@@ -437,10 +359,14 @@ public class Meet2Auto extends LinearOpMode {
 
         //Add values (obtained empirically)
         //Input is distance, output is shooter velocity
-        rangeLUT.add(35,.5);
-        rangeLUT.add(50,.6);
-        rangeLUT.add(76.54,0.67);
-        rangeLUT.add(120,.9);
+        rangeLUT.add(20,0.45);
+        rangeLUT.add(48,0.45);
+        rangeLUT.add(55,0.45);
+        rangeLUT.add(65.7,0.48);
+        rangeLUT.add(75,0.49);
+        rangeLUT.add(85,0.525);
+        rangeLUT.add(100,.56);
+        rangeLUT.createLUT();
 
         rangeLUT.createLUT();
         velocityLUT.add(-1,-2300);
@@ -465,105 +391,123 @@ public class Meet2Auto extends LinearOpMode {
         velocityLUT.createLUT();
     }
 
-    public void launcherSpinUp() {
-        if (!targetFound) {
-            launcherTargetVelocity = spinUpSpeed;
+    public double calculateRangeLUT(double input) {
+        if (input < 20 || input > 100) {
+            return 0.45;
         } else {
-            if (!aprilTag.getDetections().isEmpty()) {
-                List<AprilTagDetection> currentDetections = aprilTag.getDetections();
-                telemetry.addData("# AprilTags Detected", currentDetections.size());
-
-                for (AprilTagDetection detection : currentDetections) {
-                    if (detection.id == goalID) {
-                        launcherTargetVelocity = rangeLUT.get(detection.ftcPose.range);
-                    }
-                }
-            }
+            return rangeLUT.get(input);
         }
+    }
+
+    public void launcherSpinUp(boolean notMaxSpeed) {
+        double range=50;
+        boolean targetInSight = false;
+        double botX = currentPose.getX();
+        double botY = currentPose.getY();
+        double goalX = goalPose.getX();
+        double goalY = goalPose.getY();
+        odoRange = Math.hypot(goalX-botX,goalY-botY);
+        if (!targetInSight) {
+            range = odoRange;
+        }
+        if (notMaxSpeed) launcherTargetVelocity = calculateRangeLUT(range)-0.05;
+        else launcherTargetVelocity = calculateRangeLUT(range);
     }
 
     public void turretTargetProcedure() {
-        double targetAngle;
-        if (!aprilTag.getDetections().isEmpty()) {
-            List<AprilTagDetection> currentDetections = aprilTag.getDetections();
-            telemetry.addData("# AprilTags Detected", currentDetections.size());
-
-            for (AprilTagDetection detection : currentDetections) {
-                if (detection.id == goalID) {
-                    targetFound = true;
-                    angleError = detection.ftcPose.yaw;
-                    targetAngle = detection.ftcPose.yaw + Math.toDegrees(currentPose.getHeading());
-                    targetAngle = turretAngleLimiter(targetAngle);
-                    turretTargetPos = turretAngleToTicks(targetAngle);
-                }
-            }
-        } else {
-            targetFound = false; // changed for testing, should be false
-            angleError = 90; // changed for testing, should be very large
-            turretTrackProcedure();
-            goalVisible = false;
-        }
-
+        turretTrackProcedure();
+        angleError = turretTicksToAngle(turretTargetPos-turret.getCurrentPosition());
     }
     public void turretTrackProcedure() {
         double turretAngle;
-        turretAngle = -driveAngleDegrees + goalOffset;
+        turretAngle = calculateTurretAngle();
         turretAngle = turretAngleLimiter(turretAngle);
         turretTargetPos = turretAngleToTicks(turretAngle);
     }
+
+    public double calculateTurretAngle() {
+        double botX = currentPose.getX();
+        double botY = currentPose.getY();
+        double botHeading = Math.toDegrees(currentPose.getHeading());
+        double goalX = goalPose.getX();
+        double goalY = goalPose.getY();
+        double targetAngle = Math.toDegrees(Math.atan2(goalY-botY,goalX-botX));
+        targetAngle -= botHeading;
+        telemetryM.addData("Target Angle",targetAngle);
+        return targetAngle;
+    }
+
     public void turretControlLoop() {
         double output = turretPIDF.calculate(turret.getCurrentPosition(),turretTargetPos);
-        turret.setVelocity(output);
+        double kSFriction;
+        if (Math.abs(turretPIDF.getPositionError()) <= turretTolerance) kSFriction = 0;
+        else {
+            kSFriction = tkSCustom * (Math.abs(turretPIDF.getPositionError()) / turretPIDF.getPositionError());
+        }
+        output += kSFriction;
+        turret.set(output);
     }
 
     public int turretAngleToTicks(double angle) {
         return (int) (angle * 978.7 / 360);
     }
 
+    public int turretTicksToAngle(double ticks) {
+        return (int) (ticks * 360 / 978.7);
+    }
+
     public double turretAngleLimiter(double angleAttempt) {
         double realAngle = angleAttempt;
         if (realAngle > 180) {
-            realAngle -= 300;
+            realAngle -= 360;
         } else if (realAngle < -180) {
-            realAngle += 300;
+            realAngle += 360;
         }
-        if (realAngle > 100) {
-            realAngle = 100;
-        } else if (realAngle < -100) {
-            realAngle = -100;
+        if (Math.abs(realAngle) > 160) {
+            return turretTicksToAngle(turretTargetPos);
+        }
+        if (realAngle > 140) {
+            realAngle = 140;
+        } else if (realAngle < -140) {
+            realAngle = -140;
         }
         return realAngle;
     }
 
     public void updateTeamDependents() {
-
-        double signSwap;
-        double Xorigin;
+        double signSwap = 1;
+        double Xorigin = 0;
         double transform135=0;
         double transform180=0;
         if (Objects.equals(team,"blue")){
             goalID = 20;
             goalOffset = 135;
-            signSwap = 1;
-            Xorigin = 0;
-        } else {
-            signSwap = -1;
-            Xorigin = 144;
-            transform135 = 90;
-            transform180=180;
+            startPose = new Pose(29.5,134,Math.toRadians(90)); // placeholder
+            goalPose = new Pose(0,144,Math.toRadians(135));
+            aprilTagPose = new Pose(15,130,0);
+        } else if (Objects.equals(team,"red")) {
             goalID = 24;
             goalOffset = 45;
+            startPose = new Pose(114.5,134,Math.toRadians(90)); // placeholder
+            goalPose = new Pose(144,144,Math.toRadians(45));
+            aprilTagPose = new Pose(129,130,0);
         }
-        startPose = new Pose(Xorigin+signSwap*32.5, 135.5+startingYOffset, Math.toRadians(90)); // Start Pose of our robot.
-        scorePose = new Pose(Xorigin+signSwap*48, 96, Math.toRadians(135-transform135)); // Scoring Pose of our robot. It is facing the goal at a 135 degree angle.
-        PPGPose = new Pose(Xorigin+signSwap*46, 85.5, Math.toRadians(180-transform180)); // Highest (First Set) of Artifacts from the Spike Mark.
-        PPGPickupPose = new Pose(Xorigin+signSwap*PPGIntakeX, PPGPose.getY(),PPGPose.getHeading()); // Where to drive to while intaking PPG
-        PGPPose = new Pose(Xorigin+signSwap*46, 62.5, Math.toRadians(180-transform180)); // Middle (Second Set) of Artifacts from the Spike Mark.
-        PGPPickupPose = new Pose(Xorigin+signSwap*PGPIntakeX, PGPPose.getY(),PGPPose.getHeading()); // WHere to drive to while intaking PGP
-        PGPToScoreControlPoint = new Pose(Xorigin+signSwap*50,40); // Control point to define bezier curve
-        GPPPose = new Pose(Xorigin+signSwap*100, 37.5, Math.toRadians(180-transform180)); // Lowest (Third Set) of Artifacts from the Spike Mark.
-        GPPPickupPose = new Pose(Xorigin+signSwap*GPPIntakeX,GPPPose.getY(),GPPPose.getHeading()); // Drive forwards to intake artifacts
-        parkPose = new Pose(Xorigin+signSwap*40,70,Math.toRadians(135-transform135)); // Final position to exit launch zone
+    }
+
+    public double x(double X) { //transform X based on team
+        if (Objects.equals(team, "blue")) return X;
+        else return 144-(-1*X);
+    }
+
+    public double a(double angle) { //transform heading based on team
+        if (Objects.equals(team,"blue")) return Math.toRadians(angle);
+        else return Math.toRadians(-(angle-90)+90);
+    }
+
+    private Runnable activateTurret() {
+        turretState = "aiming";
+        launcherState = "preparing";
+        return null;
     }
 
     private void autoStateMachine() {
@@ -571,100 +515,122 @@ public class Meet2Auto extends LinearOpMode {
             case -1:
                 break;
             case 0:
-                follower.followPath(startToScore); // Move to scoring position
-                turretState = "tracking";
+                follower.followPath(StartToScore); // Move to scoring position
+                //launcherState = "firing";
                 autoState=1;
                 break;
             case 1:
                 if (!follower.isBusy()) { //Once move is finished
-                    launcherState = "beginLaunchSequence"; // Activate scoring procedure
+                    launcherState = "firing"; //launch procedure
+                    turretState = "aiming";
+                    intakeState = "idle";
+                    launchTimer.reset();
+
                     autoState=2;
                 }
                 break;
             case 2:
-                if (launcherisReady) { //Once artifacts are scored
-                    follower.followPath(scoreToPPG); // Move to PPG Intake pos
-                    autoState=3;
+                if (launchTimer.seconds() > 1.5) { //Once artifacts are scored and not turning
+                    turretState = "idle";
+                    launcherState = "rejecting"; //intake mode
+                    intakeState = "intaking";
+                    //follower.followPath(TurnToPPG);
+                    follower.turnTo(a(180));
+                    autoState = -10;
                 }
                 break;
+            case -10: //don't feel like changing every number
+                if (!follower.isBusy()) {
+                    follower.followPath(ScoreToPPG,intakeMaxPower,true); // Move to intake PPG
+                    autoState = 3;
+                }
             case 3:
                 if (!follower.isBusy()) { //Once move is finished
-                    intakeState = "intaking";
-                    follower.setMaxPower(intakeMaxPower); // Move slower?
-                    follower.followPath(PPGToIntake); // Move forwards while intaking
+                    intakeState = "idle";
+                    launcherState = "rejecting";
+                    follower.followPath(PPGToScore); // Move to score position
                     autoState=4;
+                    launchTimer.reset();
                 }
                 break;
             case 4:
+                if (launchTimer.seconds() > 0) {
+                    //launcherState = "firing";
+                }
                 if (!follower.isBusy()) {
-                    try {
-                        Thread.sleep(250);
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                    }
-                    follower.setMaxPower(1); // Back to normal speed
+                    launcherState = "firing"; //launch procedure
+                    turretState = "aiming";
                     intakeState = "idle";
-                    launcherState = "rejecting";
-                    follower.followPath(PPGIntakeToScore); // Move back to scoring position
+                    launchTimer.reset();
                     autoState=5;
                 }
                 break;
             case 5:
-                if (!follower.isBusy()) { //Once move is finished
-                    launcherState = "beginLaunchSequence"; // Artifact scoring procedure
+                if (launchTimer.seconds()>1.5) { //Once launching is (hopefully) finished
+                    launcherState = "idle";
+                    turretState = "idle";
+                    intakeState = "idle";
+                    //follower.followPath(TurnToPGP);
+                    follower.turnTo(a(256));
                     autoState=6;
                 }
                 break;
             case 6:
-                if (launcherisReady) { //If shooter is finished
-                    follower.followPath(scoreToPGP); // Move to PGP intake position
+                if (!follower.isBusy()) { //If turn is finished
+                    follower.followPath(ScoreToPGP); // Move to PGP intake position
                     autoState=7;
                 }
                 break;
             case 7:
                 if (!follower.isBusy()) {
-                    follower.setMaxPower(intakeMaxPower); // Go slower?
                     intakeState = "intaking"; // Activate intake
-                    follower.followPath(PGPToIntake); // Move forwards while intaking
+                    launcherState = "rejecting";
+                    follower.followPath(PGPIntake,intakeMaxPower,true); // Move forwards while intaking
                     autoState=8;
                 }
                 break;
             case 8:
                 if (!follower.isBusy()) { // Once move is complete
-                    try {
-                        Thread.sleep(250);
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                    }
+//                    try {
+//                        Thread.sleep(250);
+//                    } catch (InterruptedException e) {
+//                        Thread.currentThread().interrupt();
+//                    }
                     intakeState = "idle"; // Disable intake/launcher
                     launcherState = "rejecting"; // Run launcher backwards to push out stuck artifacts
-                    follower.setMaxPower(1); // Back to max speed
-                    follower.followPath(PGPIntakeToScore); // Go back to scoring position
+                    follower.followPath(PGPToScore); // Go back to scoring position
                     autoState=9;
                 }
                 break;
             case 9:
                 if (!follower.isBusy()) { // Once move is complete
-                    launcherState = "beginLaunchSequence";
-                    autoState=10;
+                    launcherState = "firing"; //launch procedure
+                    turretState = "aiming";
+                    intakeState = "idle";
+                    launchTimer.reset();
+                    autoState=-100;
+                }
+                break;
+            case -100: //don't want to disrupt order
+                if (!follower.isBusy()) {
+                    follower.turnTo(a(270));
+                    autoState = 10;
                 }
                 break;
             case 10:
-                if (launcherisReady) { //If shooter is finished
-                    if (autoTimer.seconds() > 23) {
-                        autoState = 15; // park to end auto
-                    } else {
-                        follower.followPath(scoreToGPP); // Go to parking position
-                        autoState=11;
-                    }
-
+                if (launchTimer.seconds() > 3) { //If shooter is finished
+                    launcherState = "idle";
+                    turretState = "idle";
+                    intakeState = "idle";
+                    follower.followPath(ScoreToGPP,1.0,true); // Go to GPP intake position
+                    autoState=11;
                 }
                 break;
             case 11:
                 if (!follower.isBusy()) {
-                    follower.setMaxPower(intakeMaxPower); // Go slower?
                     intakeState = "intaking"; // Activate intake
-                    follower.followPath(GPPToIntake); // Move forwards while intaking
+                    launcherState = "rejecting";
+                    follower.followPath(GPPIntake,intakeMaxPower,true); // Move forwards while intaking
                     autoState=12;
                 }
                 break;
@@ -672,28 +638,29 @@ public class Meet2Auto extends LinearOpMode {
                 if (!follower.isBusy()) {
                     intakeState = "idle"; // Disable intake/launcher
                     launcherState = "rejecting"; // Run launcher backwards to push out stuck artifacts
-                    follower.setMaxPower(1); // Back to max speed
-                    if (autoTimer.seconds() > 25) {
-                        autoState = 16;
-                    } else {
-                        follower.followPath(GPPIntakeToScore); // Go back to scoring position
-                        autoState=13;
-                    }
+                    follower.followPath(GPPToScore); // Go back to scoring position
+                    autoState = 13;
                 }
                 break;
             case 13:
                 if (!follower.isBusy()) {
-                    launcherState = "beginLaunchSequence";
+                    launcherState = "firing"; //launch procedure
+                    turretState = "aiming";
+                    intakeState = "idle";
+                    launchTimer.reset();
                     autoState = 14;
                 }
                 break;
             case 14:
-                if (launcherisReady) {
+                if (launchTimer.seconds() > 1.5) {
+                    launcherState = "idle";
+                    turretState = "idle";
+                    intakeState = "idle";
                     autoState = 15;
                 }
                 break;
             case 15:
-                follower.followPath(scoreToPark);
+                follower.followPath(Park);
                 autoState = 16;
                 break;
             case 16: //resetting or any other things necessary before autonomous ends
@@ -708,82 +675,148 @@ public class Meet2Auto extends LinearOpMode {
     }
 
     public void buildPaths() {
-        startToScore = follower.pathBuilder()
-                .addPath(new BezierLine(startPose,scorePose))
-                .setLinearHeadingInterpolation(startPose.getHeading(),scorePose.getHeading())
-                .build();
-        scoreToPPG = follower.pathBuilder()
-                .addPath(new BezierLine(scorePose,PPGPose))
-                .setLinearHeadingInterpolation(scorePose.getHeading(),PPGPose.getHeading())
-                .setTranslationalConstraint(0.5)
-                .build();
-        PPGToIntake = follower.pathBuilder()
-                .addPath(new BezierLine(PPGPose,PPGPickupPose))
-                .setLinearHeadingInterpolation(PPGPose.getHeading(),PPGPickupPose.getHeading())
-                .build();
-        PPGIntakeToScore = follower.pathBuilder()
-                .addPath(new BezierLine(PPGPickupPose,scorePose))
-                .setLinearHeadingInterpolation(PPGPickupPose.getHeading(),scorePose.getHeading())
-                .build();
-        scoreToPGP = follower.pathBuilder()
-                .addPath(new BezierLine(scorePose,PGPPose))
-                .setLinearHeadingInterpolation(scorePose.getHeading(),PGPPose.getHeading())
-                .build();
-        PGPToIntake = follower.pathBuilder()
-                .addPath(new BezierLine(PGPPose,PGPPickupPose))
-                .setLinearHeadingInterpolation(PGPPose.getHeading(),PGPPickupPose.getHeading())
-                .build();
-        PGPIntakeToScore = follower.pathBuilder()
-                .addPath(new BezierLine(PGPPickupPose,PGPPose))
-                .setLinearHeadingInterpolation(PGPPose.getHeading(),PGPPose.getHeading())
-                .addPath(new BezierLine(PGPPose,scorePose))
-                .setLinearHeadingInterpolation(PGPPickupPose.getHeading(),scorePose.getHeading())
-                .build();
-        scoreToGPP = follower.pathBuilder()
-                .addPath(new BezierLine(scorePose,GPPPose))
-                .setLinearHeadingInterpolation(scorePose.getHeading(),GPPPose.getHeading())
-                .build();
-        GPPToIntake = follower.pathBuilder()
-                .addPath(new BezierLine(GPPPose,GPPPickupPose))
-                .setLinearHeadingInterpolation(GPPPose.getHeading(),GPPPickupPose.getHeading())
-                .build();
-        GPPIntakeToScore = follower.pathBuilder()
-                .addPath(new BezierLine(GPPPickupPose,GPPPose))
-                .setLinearHeadingInterpolation(GPPPickupPose.getHeading(),GPPPose.getHeading())
-                .addPath(new BezierLine(GPPPose,scorePose))
-                .setLinearHeadingInterpolation(GPPPose.getHeading(),scorePose.getHeading())
-                .build();
-        scoreToPark = follower.pathBuilder()
-                .addPath(new BezierLine(scorePose,parkPose))
-                .setLinearHeadingInterpolation(scorePose.getHeading(),parkPose.getHeading())
-                .build();
-    }
 
-    /*public void definePoses(String team) {
-        double signSwap;
-        double Xorigin;
-        double transform135=0;
-        double transform180=0;
-        if (isRed) {
-            signSwap = -1;
-            Xorigin = 144;
-            transform135 = 90;
-            transform180=180;
-        } else {
-            signSwap = 1;
-            Xorigin = 0;
+
+        StartToScore = follower
+                .pathBuilder()
+                .addPath(
+                        new BezierCurve(
+                                new Pose(x(29.5), 135.5),
+                                new Pose(x(29.5), 106.5),
+                                new Pose(x(52), 84)
+                        )
+                )
+                .setTangentHeadingInterpolation()
+                .setReversed()
+                .addParametricCallback(50,activateTurret())
+                .build();
+        TurnToPPG = follower
+                .pathBuilder()
+                .addPath(
+                        new BezierLine(new Pose(x(52), 84), new Pose(x(52), 84))
+                )
+                .setLinearHeadingInterpolation(a(135), a(180))
+                .build();
+
+        ScoreWait1 = 1000;
+
+        ScoreToPPG = follower
+                .pathBuilder()
+                .addPath(
+                        new BezierLine(new Pose(x(52), 84), new Pose(x(16), 84))
+                )
+                .setTangentHeadingInterpolation()
+                .build();
+
+        PPGToScore = follower
+                .pathBuilder()
+                .addPath(
+                        new BezierLine(new Pose(x(16), 84), new Pose(x(58), 84))
+                )
+                .setTangentHeadingInterpolation()
+                .setReversed()
+                .addParametricCallback(50,activateTurret())
+                .build();
+
+        TurnToPGP = follower
+                .pathBuilder()
+                .addPath(
+                        new BezierLine(new Pose(x(58), 84), new Pose(x(58), 84))
+                )
+                .setLinearHeadingInterpolation(a(180), a(256))
+                .build();
+
+        ScoreWait2 = 1000;
+
+        ScoreToPGP = follower
+                .pathBuilder()
+                .addPath(
+                        new BezierCurve(
+                                new Pose(x(58), 84),
+                                new Pose(x(52), 60),
+                                new Pose(x(43), 60)
+                        )
+                )
+                .setTangentHeadingInterpolation()
+                .build();
+
+        PGPIntake = follower
+                .pathBuilder()
+                .addPath(
+                        new BezierLine(new Pose(x(43), 60), new Pose(x(16), 60))
+                )
+                .setTangentHeadingInterpolation()
+                .build();
+
+        PGPToScore = follower
+                .pathBuilder()
+                .addPath(
+                        new BezierCurve(
+                                new Pose(x(16), 60),
+                                new Pose(x(46), 60),
+                                new Pose(x(60), 84)
+                        )
+                )
+                .setTangentHeadingInterpolation()
+                .setReversed()
+                .addParametricCallback(50,activateTurret())
+                .build();
+
+        ScoreWait3 = 1000;
+
+        TurnToGPP = follower
+                .pathBuilder()
+                .addPath(
+                        new BezierLine(new Pose(x(60), 84), new Pose(x(60), 84))
+                )
+                .setLinearHeadingInterpolation(a(240), a(270))
+                .build();
+
+        ScoreToGPP = follower
+                .pathBuilder()
+                .addPath(
+                        new BezierCurve(
+                                new Pose(x(60), 84),
+                                new Pose(x(59), 36),
+                                new Pose(x(43), 36)
+                        )
+                )
+                .setTangentHeadingInterpolation()
+                .build();
+
+        GPPIntake = follower
+                .pathBuilder()
+                .addPath(
+                        new BezierLine(new Pose(x(43), 36), new Pose(x(10), 36))
+                )
+                .setTangentHeadingInterpolation()
+                .build();
+
+        GPPToScore = follower
+                .pathBuilder()
+                .addPath(
+                        new BezierCurve(
+                                new Pose(x(10), 36),
+                                new Pose(x(50), 36),
+                                new Pose(x(60), 84)
+                        )
+                )
+                .setTangentHeadingInterpolation()
+                .setReversed()
+                .addParametricCallback(50,activateTurret())
+                .build();
+
+        ScoreWait3 = 1000;
+
+        Park = follower
+                .pathBuilder()
+                .addPath(
+                        new BezierLine(new Pose(x(60), 84), new Pose(x(56), 65.8))
+                )
+                .setTangentHeadingInterpolation()
+                .build();
+
         }
 
-        startPose = new Pose(Xorigin+signSwap*32.5, 135.5+startingYOffset, Math.toRadians(90)); // Start Pose of our robot.
-        scorePose = new Pose(Xorigin+signSwap*48, 96, Math.toRadians(135-transform135)); // Scoring Pose of our robot. It is facing the goal at a 135 degree angle.
-        PPGPose = new Pose(Xorigin+signSwap*46, 85.5, Math.toRadians(180-transform180)); // Highest (First Set) of Artifacts from the Spike Mark.
-        PPGPickupPose = new Pose(Xorigin+signSwap*PPGIntakeX, PPGPose.getY(),PPGPose.getHeading()); // Where to drive to while intaking PPG
-        PGPPose = new Pose(Xorigin+signSwap*46, 62.5, Math.toRadians(180-transform180)); // Middle (Second Set) of Artifacts from the Spike Mark.
-        PGPPickupPose = new Pose(Xorigin+signSwap*PGPIntakeX, PGPPose.getY(),PGPPose.getHeading()); // WHere to drive to while intaking PGP
-        PGPToScoreControlPoint = new Pose(Xorigin+signSwap*50,40); // Control point to define bezier curve
-        GPPPose = new Pose(Xorigin+signSwap*100, 37.5, Math.toRadians(180-transform180)); // Lowest (Third Set) of Artifacts from the Spike Mark.
-        GPPPickupPose = new Pose(Xorigin+signSwap*GPPIntakeX,GPPPose.getY(),GPPPose.getHeading()); // Drive forwards to intake artifacts
-        parkPose = new Pose(Xorigin+signSwap*40,70,Math.toRadians(135-transform135)); // Final position to exit launch zone
-    }*/
-
 }
+

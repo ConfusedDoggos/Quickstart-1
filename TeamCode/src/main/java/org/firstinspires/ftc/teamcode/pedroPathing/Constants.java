@@ -17,25 +17,26 @@ import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
 @Configurable
 public class Constants {
 
-    public static double linearVelocity = 73.7136;
-    public static double lateralVelocity = 51.281485;
-    public static double linearDeceleration = -33.753513;
-    public static double lateralDeceleration = -53.293454;
-
 
     public static FollowerConstants followerConstants = new FollowerConstants()
-        //.translationalPIDFCoefficients(new PIDFCoefficients(0.2, 0, 0.015, 0))
-        //.headingPIDFCoefficients(new PIDFCoefficients(1.25, 0, 0.06, 0.02))
-        //.drivePIDFCoefficients(new FilteredPIDFCoefficients(0.025,0,0.00001,6,0.05))
-        //.forwardZeroPowerAcceleration(linearDeceleration)
-        //.lateralZeroPowerAcceleration(lateralDeceleration)
-        .mass(9.7);
-        //.centripetalScaling(0.002);
+            .useSecondaryDrivePIDF(true)
+            .useSecondaryHeadingPIDF(true)
+            .useSecondaryTranslationalPIDF(true)
+            .secondaryTranslationalPIDFCoefficients(new PIDFCoefficients(0.25,0,0.02,0.015))
+            .translationalPIDFCoefficients(new PIDFCoefficients(0.1, 0, 0.01, 0.11))
+            .headingPIDFCoefficients(new PIDFCoefficients(1, 0, 0, 0.01))
+            .secondaryHeadingPIDFCoefficients(new PIDFCoefficients(2,0,0.1,0.01))
+            .drivePIDFCoefficients(new FilteredPIDFCoefficients(0.009,0,0.00001,.6,0.03))
+            .secondaryDrivePIDFCoefficients(new FilteredPIDFCoefficients(0.01,0,0.000005,0.6,0.005))
+            .forwardZeroPowerAcceleration(-62.8563)
+            .lateralZeroPowerAcceleration(-95.8876)
+            .mass(9.3);
+            //.centripetalScaling(0.005);
 
     public static MecanumConstants driveConstants = new MecanumConstants()
             .maxPower(1)
-            .xVelocity(linearVelocity)
-            //.yVelocity(lateralVelocity)
+            .xVelocity(74.4975)
+            .yVelocity(55.9221)
             .rightFrontMotorName("fR")
             .rightRearMotorName("bR")
             .leftRearMotorName("bL")
@@ -53,7 +54,7 @@ public class Constants {
             .encoderResolution(GoBildaPinpointDriver.GoBildaOdometryPods.goBILDA_4_BAR_POD)
             .forwardEncoderDirection(GoBildaPinpointDriver.EncoderDirection.REVERSED)
             .strafeEncoderDirection(GoBildaPinpointDriver.EncoderDirection.FORWARD);
-    public static PathConstraints pathConstraints = new PathConstraints(0.99, 100, 1.1, 0.6);
+    public static PathConstraints pathConstraints = new PathConstraints(0.99, 100, 0.85,.7);
 
     public static Follower createFollower(HardwareMap hardwareMap) {
         return new FollowerBuilder(followerConstants, hardwareMap)

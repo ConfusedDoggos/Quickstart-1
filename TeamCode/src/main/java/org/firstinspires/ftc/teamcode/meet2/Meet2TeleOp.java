@@ -108,12 +108,9 @@ public class Meet2TeleOp extends LinearOpMode {
 
         //set the default settings for motors and initializes them (wow)
         initMotors();
-        initTrackingSoftware();
+        //initTrackingSoftware();
         createLUTs();
 
-        telemetry.addData("DS preview on/off", "3 dots, Camera Stream");
-        telemetry.addData(">", "Touch START to start OpMode");
-        telemetry.update();
         List<LynxModule> hubs = hardwareMap.getAll(LynxModule.class);
         hubs.forEach(hub -> hub.setBulkCachingMode(LynxModule.BulkCachingMode.MANUAL));
         teleTimer = new ElapsedTime();
@@ -188,7 +185,7 @@ public class Meet2TeleOp extends LinearOpMode {
         launcher = new MotorGroup(launcher1, launcher2);
     }
 
-    public void initTrackingSoftware() {
+    /*public void initTrackingSoftware() {
         aprilTag = new AprilTagProcessor.Builder().build();
 
         VisionPortal.Builder builder = new VisionPortal.Builder();
@@ -205,7 +202,7 @@ public class Meet2TeleOp extends LinearOpMode {
 
 
 
-    }
+    }*/
     public void teleOp() {
         DriverInput();
         DTTeleOp();
@@ -216,14 +213,14 @@ public class Meet2TeleOp extends LinearOpMode {
 
     public void DriverInput() {
         //DT Section
-        double driveSpeedMulti;
-        driveSpeedMulti = 1;
         if (gamepad1.left_bumper) {
-            driveSpeedMulti = 0.5;
+             drive.setMaxSpeed(0.5);
+        } else {
+            drive.setMaxSpeed(1);
         }
-        strafeInput = gamepad1.left_stick_x * driveSpeedMulti;
-        driveInput = -gamepad1.left_stick_y * driveSpeedMulti;
-        turnInput = gamepad1.right_stick_x * driveSpeedMulti;
+        strafeInput = gamepad1.left_stick_x;
+        driveInput = -gamepad1.left_stick_y;
+        turnInput = gamepad1.right_stick_x;
 
         /*if (gamepad1.left_stick_button && gamepad1.right_stick_button) {
             follower.setPose(new Pose(currentPose.getX(),currentPose.getY(),Math.toRadians(90)));
@@ -245,6 +242,7 @@ public class Meet2TeleOp extends LinearOpMode {
         } else if (gamepad1.x) {
             intakeState = "idle";
             turretState = "idle";
+            launcherState = "idle";
         }
 
         //Launcher Section
@@ -252,7 +250,7 @@ public class Meet2TeleOp extends LinearOpMode {
             launcherState = "beginLaunchSequence";
         } else if (gamepad2.dpad_up || gamepad1.left_stick_button) {
             launcherState = "testSpeed";
-        } else if (gamepad2.dpad_down || gamepad1.x) {
+        } else if (gamepad2.dpad_down) {
             launcherState = "idle";
         } else if (gamepad2.right_stick_button || gamepad1.dpad_down) {
             launcherState = "idle";
@@ -260,7 +258,8 @@ public class Meet2TeleOp extends LinearOpMode {
             turretState = "tracking";
         } else if (gamepad1.right_bumper) {
             launcherState = "firing";
-            turretState = "tracking";
+            turretState = "aiming";
+            intakeState = "idle";
         }
         
         //Turret Section
@@ -375,7 +374,8 @@ public class Meet2TeleOp extends LinearOpMode {
             case "aiming":
                 launcherSpinUp();
                 launcher.set(launcherTargetVelocity);
-                if (Math.abs(launcher.getVelocity()) > Math.abs(velocityLUT.get(launcherTargetVelocity)) - 60) {
+                intakeState = "idle";
+                if (Math.abs(launcher.getVelocity()) > Math.abs(velocityLUT.get(launcherTargetVelocity)) - 20) {
                     launcherState = "acc_ready";
                 }
                 break;
@@ -390,16 +390,10 @@ public class Meet2TeleOp extends LinearOpMode {
             case "firing":
                 launcherSpinUp();
                 launcher.set(launcherTargetVelocity);
-                /*if (Math.abs(launcher.getVelocity()) < Math.abs(velocityLUT.get(launcherTargetVelocity)) - 100) {
-                    ballsLaunched += 1;
-                    launcherState = "aiming";
+                if (Objects.equals(turretState,"aiming")) {
                     intakeState = "idle";
-                    if (ballsLaunched == 3) {
-                        ballsLaunched = 0;
-                        launcherState = "idle";
-                        turretState = "tracking";
-                    }
-                }*/
+                    launcherState = "aiming";
+                }
                 break;
             case "rejecting":
                 launcherTargetVelocity = -.6;
@@ -498,7 +492,7 @@ public class Meet2TeleOp extends LinearOpMode {
             }
         } else {*/
         turretTrackProcedure();
-        angleError = turretTargetPos-turret.getCurrentPosition();
+        angleError = turretTicksToAngle(turretTargetPos-turret.getCurrentPosition());
         //}
 
     }
@@ -546,7 +540,7 @@ public class Meet2TeleOp extends LinearOpMode {
             realAngle += 360;
         }
         if (Math.abs(realAngle) > 160) {
-            return realAngle;
+            return turretTicksToAngle(turretTargetPos);
         }
         if (realAngle > 120) {
             realAngle = 120;
