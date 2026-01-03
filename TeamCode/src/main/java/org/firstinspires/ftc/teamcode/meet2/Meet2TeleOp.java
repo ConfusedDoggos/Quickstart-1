@@ -84,7 +84,7 @@ public class Meet2TeleOp extends LinearOpMode {
 
     //Turret Variables
     private PIDFController turretPIDF;
-    public static double turretTolerance = 3;
+    public static double turretTolerance = 2;
     public static double tkP = 0.0025;
     public static double tkI = 0;
     public static double tkD = 0.00005;
@@ -239,7 +239,7 @@ public class Meet2TeleOp extends LinearOpMode {
             }
         } else if (gamepad2.left_bumper || gamepad1.right_stick_button) {
             intakeState = "firing";
-        } else if (gamepad1.x) {
+        } else if (gamepad1.x || gamepad2.x) {
             intakeState = "idle";
             turretState = "idle";
             launcherState = "idle";
@@ -247,7 +247,7 @@ public class Meet2TeleOp extends LinearOpMode {
 
         //Launcher Section
         if (gamepad2.right_bumper && launcherisReady) {
-            launcherState = "beginLaunchSequence";
+            //launcherState = "beginLaunchSequence";
         } else if (gamepad2.dpad_up || gamepad1.left_stick_button) {
             launcherState = "testSpeed";
         } else if (gamepad2.dpad_down) {
@@ -255,8 +255,9 @@ public class Meet2TeleOp extends LinearOpMode {
         } else if (gamepad2.right_stick_button || gamepad1.dpad_down) {
             launcherState = "idle";
             intakeState = "idle";
-            turretState = "tracking";
-        } else if (gamepad1.right_bumper) {
+            turretState = "idle";
+        }
+        if (gamepad1.right_bumper || gamepad2.right_bumper) {
             launcherState = "firing";
             turretState = "aiming";
             intakeState = "idle";
@@ -282,7 +283,7 @@ public class Meet2TeleOp extends LinearOpMode {
             turretTargetPos = turretAngleToTicks(0);
         }
         if (gamepad2.dpad_up || gamepad1.dpad_left) {
-            turretState = "tracking";
+            //turretState = "tracking";
         } else if (gamepad2.dpad_down || gamepad1.dpad_right) {
             turretState = "idle";
         }
@@ -375,7 +376,7 @@ public class Meet2TeleOp extends LinearOpMode {
                 launcherSpinUp();
                 launcher.set(launcherTargetVelocity);
                 intakeState = "idle";
-                if (Math.abs(launcher.getVelocity()) > Math.abs(velocityLUT.get(launcherTargetVelocity)) - 20) {
+                if (Math.abs(launcher.getVelocity()) > Math.abs(velocityLUT.get(launcherTargetVelocity)) - 60) {
                     launcherState = "acc_ready";
                 }
                 break;
@@ -405,38 +406,28 @@ public class Meet2TeleOp extends LinearOpMode {
 
     public void createLUTs() {
         //create shooting speed lookup table
-
         //Add values (obtained empirically)
         //Input is distance, output is shooter velocity
-        rangeLUT.add(20,0.45);
-        rangeLUT.add(48,0.45);
-        rangeLUT.add(55,0.45);
-        rangeLUT.add(65.7,0.48);
-        rangeLUT.add(75,0.49);
-        rangeLUT.add(85,0.525);
-        rangeLUT.add(100,.56);
+        rangeLUT.add(20,0.43);
+        rangeLUT.add(48,0.43);
+        rangeLUT.add(55,0.43);
+        rangeLUT.add(65.7,0.46);
+        rangeLUT.add(75,0.47);
+        rangeLUT.add(85,0.515);
+        rangeLUT.add(100,.54);
         rangeLUT.createLUT();
 
-
-        velocityLUT.add(-1,-2300);
-        velocityLUT.add(-0.8,-1760);
-        velocityLUT.add(-0.7,-1560);
-        velocityLUT.add(-0.6,-1320);
-        velocityLUT.add(-0.5,-1100);
-        velocityLUT.add(-0.4,-880);
-        velocityLUT.add(-0.3,-660);
-        velocityLUT.add(-0.2,-430);
-        velocityLUT.add(-0.1,-210);
+        velocityLUT.add(-1,2500);
+        velocityLUT.add(-0.8,2000);
+        velocityLUT.add(-0.6,1500);
+        velocityLUT.add(-.4,1000);
+        velocityLUT.add(-.2,500);
         velocityLUT.add(0,0);
-        velocityLUT.add(0.1,210);
-        velocityLUT.add(0.2,430);
-        velocityLUT.add(0.3,660);
-        velocityLUT.add(0.4,880);
-        velocityLUT.add(0.5,1100);
-        velocityLUT.add(0.6,1320);
-        velocityLUT.add(0.7,1560);
-        velocityLUT.add(0.8,1760);
-        velocityLUT.add(1,2300);
+        velocityLUT.add(0.2,500);
+        velocityLUT.add(0.4,1000);
+        velocityLUT.add(0.6,1500);
+        velocityLUT.add(0.8,2000);
+        velocityLUT.add(1,2500);
         velocityLUT.createLUT();
     }
 
@@ -542,10 +533,10 @@ public class Meet2TeleOp extends LinearOpMode {
         if (Math.abs(realAngle) > 160) {
             return turretTicksToAngle(turretTargetPos);
         }
-        if (realAngle > 120) {
-            realAngle = 120;
-        } else if (realAngle < -120) {
-            realAngle = -120;
+        if (realAngle > 140) {
+            realAngle = 140;
+        } else if (realAngle < -140) {
+            realAngle = -140;
         }
         return realAngle;
     }
@@ -554,13 +545,13 @@ public class Meet2TeleOp extends LinearOpMode {
         if (Objects.equals(team,"blue")){
             goalID = 20;
             goalOffset = 135;
-            startPose = new Pose(29.5,136,Math.toRadians(90)); // placeholder
+            startPose = new Pose(29.5,134,Math.toRadians(90)); // placeholder
             goalPose = new Pose(0,144,Math.toRadians(135));
             aprilTagPose = new Pose(15,130,0);
         } else if (Objects.equals(team,"red")) {
             goalID = 24;
             goalOffset = 45;
-            startPose = new Pose(114.5,136,Math.toRadians(90)); // placeholder
+            startPose = new Pose(114.5,134,Math.toRadians(90)); // placeholder
             goalPose = new Pose(144,144,Math.toRadians(45));
             aprilTagPose = new Pose(129,130,0);
         }

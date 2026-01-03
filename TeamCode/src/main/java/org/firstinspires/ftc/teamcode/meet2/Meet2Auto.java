@@ -44,13 +44,13 @@ public class Meet2Auto extends LinearOpMode {
     //Timer
     private final ElapsedTime launchTimer = new ElapsedTime(ElapsedTime.Resolution.SECONDS);
     private final ElapsedTime autoTimer = new ElapsedTime(ElapsedTime.Resolution.SECONDS);
+    private final ElapsedTime ballTimer = new ElapsedTime(ElapsedTime.Resolution.SECONDS);
 
     //Panels Editable Variables
     public static double PPGIntakeX = 15.5;
     public static double PGPIntakeX = 12;
     public static double GPPIntakeX = 12;
     public static double intakeMaxPower = 0.5;
-    public static double shooterSpeedGap = 81;
     public static double shootDistance = 52;
 
 
@@ -77,7 +77,7 @@ public class Meet2Auto extends LinearOpMode {
 
     //Changing variables
     public int autoState = 0;
-        private boolean sequenceFinished = false;
+    private boolean sequenceFinished = false;
     private boolean autoInitialized = false;
 
     //April Tag Variables
@@ -102,27 +102,29 @@ public class Meet2Auto extends LinearOpMode {
     private InterpLUT velocityLUT = new InterpLUT(), rangeLUT= new InterpLUT();
 
     //Launcher Variables
-    public static double kp = 1;
+    public static double kp = 1.5;
     public static double ki = 200;
     public static double kd = 0;
-    public static double ks = 0;
-    public static double kv = 0;
     private double launcherTargetVelocity;
     public static double launcherTestSpeed = 0.6;
     public double odoRange = 0;
+    public int ballsLaunched = 0;
+    public static double launchDelaySeconds = 0.15;
+    public static double shooterSpeedGap = 50;
+    public double previousVelocity = 0;
 
     //Intake Variables
-    public static double intakePickupSpeed = .8;
-    public static double transferLoadSpeed = .8;
+    public static double intakePickupSpeed = .9;
+    public static double transferLoadSpeed = 1;
     public static double intakeRejectSpeed = -0.5;
 
     //Turret Variables
     private PIDFController turretPIDF;
-    public static double turretTolerance = 3;
+    public static double turretTolerance = 1;
     public static double tkP = 0.0025;
     public static double tkI = 0;
     public static double tkD = 0.00005;
-    public static double tkSCustom = 0.13;
+    public static double tkSCustom = 0.15;
     public static double errorTotal = 30;
     private boolean targetFound = false;
     private int turretTargetPos;
@@ -147,12 +149,12 @@ public class Meet2Auto extends LinearOpMode {
         follower= Constants.createFollower(hardwareMap);
         while (opModeInInit()) {
             telemetry.addLine("Driver: Press left stick for blue team and right stick for red team.");
-            telemetry.addData("Team Selected:",team);
+            telemetry.addData("Team Selected:", team);
             telemetry.update();
             if (gamepad1.left_stick_button) {
-                team="blue";
+                team = "blue";
             } else if (gamepad1.right_stick_button) {
-                team="red";
+                team = "red";
             }
         }
         updateTeamDependents();
@@ -183,9 +185,14 @@ public class Meet2Auto extends LinearOpMode {
             telemetryM.addData("X",currentPose.getX());
             telemetryM.addData("Y",currentPose.getY());
             telemetryM.addData("Heading",currentPose.getHeading());
-            telemetryM.addData("Auto State",autoState);
-            telemetryM.addData("Launcher State",launcherState);
-            telemetryM.addData("Launcher Timer", launchTimer);
+            //telemetryM.addData("Auto State",autoState);
+            //telemetryM.addData("Launcher State",launcherState);
+            //telemetryM.addData("Launcher Timer", launchTimer);
+            telemetryM.addData("Launcher Velocitu",launcher.getVelocity());
+            telemetryM.addData("Turret Target",turretTargetPos);
+            telemetryM.addData("Turret Pos",turret.getCurrentPosition());
+            telemetryM.addData("Balls Launched",ballsLaunched);
+            telemetryM.addData("BallTimer",ballTimer);
             telemetryM.update();
         }
     }
@@ -203,38 +210,16 @@ public class Meet2Auto extends LinearOpMode {
         turret.resetEncoder();
         launcher2.setInverted(true);
         launcher1.setVeloCoefficients(kp,ki,kd);
-        //launcher1.setFeedforwardCoefficients(ks,kv);
         launcher2.setVeloCoefficients(kp,ki,kd);
-        //launcher2.setFeedforwardCoefficients(ks,kv);
         launcher1.setRunMode(Motor.RunMode.VelocityControl);
         launcher2.setRunMode(Motor.RunMode.VelocityControl);
         drive = new MecanumDrive(fL, fR, bL, bR);
         drive.setRightSideInverted(false);
         turretPIDF = new PIDFController(tkP, tkI, tkD, 0);
-        //turretPIDF.setTolerance(1,0);
-        //turret.setCachingTolerance(0.01);
         turretPIDF.setIntegrationBounds(-errorTotal,errorTotal);
         launcher = new MotorGroup(launcher1, launcher2);
     }
 
-    /*public void initTrackingSoftware() {
-        aprilTag = new AprilTagProcessor.Builder().build();
-
-        VisionPortal.Builder builder = new VisionPortal.Builder();
-
-        if (USE_WEBCAM) {
-            builder.setCamera(hardwareMap.get(WebcamName.class, "Webcam 1"));
-        } else {
-            builder.setCamera(BuiltinCameraDirection.BACK);
-        }
-
-        builder.addProcessor(aprilTag);
-
-        visionPortal = builder.build();
-
-
-
-    }*/
     public void auto() {
         DTAuto();
         turretAuto();
@@ -284,13 +269,13 @@ public class Meet2Auto extends LinearOpMode {
                 case "aiming": //Use apriltag to exactly aim at goal and find range to pass into launcher
                     turretisReady = false;
                     turretTargetProcedure();
-                    if (Math.abs(angleError) <= 5) {
+                    if (Math.abs(angleError) <= 3) {
                         turretState = "aimed";
                     }
                     break;
                 case "aimed":
                     turretTargetProcedure();
-                    if (Math.abs(angleError) >= 5) {
+                    if (Math.abs(angleError) >= 3) {
                         turretState = "aiming";
                     }
             }
@@ -312,22 +297,22 @@ public class Meet2Auto extends LinearOpMode {
                 launcher.set(launcherTargetVelocity);
                 break;
             case "beginLaunchSequence":
-                launcherSpinUp(false);
+                launcherSpinUp();
                 launcher.set(launcherTargetVelocity);
                 launcherisReady = false;
                 launcherState = "aiming";
                 turretState = "aiming";
                 break;
             case "aiming":
-                launcherSpinUp(false);
+                launcherSpinUp();
                 launcher.set(launcherTargetVelocity);
                 intakeState = "idle";
-                if (Math.abs(launcher.getVelocity()) > Math.abs(velocityLUT.get(launcherTargetVelocity)) - 20) {
+                if (Math.abs(launcher.getVelocity()) > Math.abs(velocityLUT.get(launcherTargetVelocity)) - shooterSpeedGap) {
                     launcherState = "acc_ready";
                 }
                 break;
             case "acc_ready":
-                launcherSpinUp(false);
+                launcherSpinUp();
                 launcher.set(launcherTargetVelocity);
                 if (Objects.equals(turretState, "aimed")) {
                     intakeState = "firing";
@@ -335,7 +320,8 @@ public class Meet2Auto extends LinearOpMode {
                     break;
                 }
             case "firing":
-                launcherSpinUp(false);
+                launcherSpinUp();
+                checkForLaunch();
                 launcher.set(launcherTargetVelocity);
                 if (Objects.equals(turretState,"aiming")) {
                     intakeState = "idle";
@@ -343,14 +329,30 @@ public class Meet2Auto extends LinearOpMode {
                 }
                 break;
             case "preparing":
-                launcherSpinUp(true);
+                launcherSpinUp();
                 launcher.set(launcherTargetVelocity);
                 break;
             case "rejecting":
-                launcherTargetVelocity = -.6;
+                launcherTargetVelocity = -.3;
                 launcher.set(launcherTargetVelocity);
                 launcherisReady=true;
                 break;
+        }
+    }
+
+    public void checkForLaunch() {
+        if (Math.abs(launcher.getVelocity()) <= Math.abs(velocityLUT.get(launcherTargetVelocity))-shooterSpeedGap*1.5) {
+            ballsLaunched += 1;
+            intakeState = "idle";
+            launcherState = "aiming";
+            ballTimer.reset();
+        }
+        if (ballsLaunched >= 3) {
+            launcherState = "idle";
+            turretState = "idle";
+            intakeState = "idle";
+            launcherisReady = true;
+            ballsLaunched = 0;
         }
     }
 
@@ -359,35 +361,26 @@ public class Meet2Auto extends LinearOpMode {
 
         //Add values (obtained empirically)
         //Input is distance, output is shooter velocity
-        rangeLUT.add(20,0.45);
-        rangeLUT.add(48,0.45);
-        rangeLUT.add(55,0.45);
-        rangeLUT.add(65.7,0.48);
-        rangeLUT.add(75,0.49);
-        rangeLUT.add(85,0.525);
-        rangeLUT.add(100,.56);
+        rangeLUT.add(20,0.43);
+        rangeLUT.add(48,0.43);
+        rangeLUT.add(55,0.43);
+        rangeLUT.add(65.7,0.46);
+        rangeLUT.add(75,0.475);
+        rangeLUT.add(85,0.505);
+        rangeLUT.add(100,.525);
         rangeLUT.createLUT();
 
-        rangeLUT.createLUT();
-        velocityLUT.add(-1,-2300);
-        velocityLUT.add(-0.8,-1760);
-        velocityLUT.add(-0.7,-1560);
-        velocityLUT.add(-0.6,-1320);
-        velocityLUT.add(-0.5,-1100);
-        velocityLUT.add(-0.4,-880);
-        velocityLUT.add(-0.3,-660);
-        velocityLUT.add(-0.2,-430);
-        velocityLUT.add(-0.1,-210);
+        velocityLUT.add(-1,2500);
+        velocityLUT.add(-0.8,2000);
+        velocityLUT.add(-0.6,1500);
+        velocityLUT.add(-.4,1000);
+        velocityLUT.add(-.2,500);
         velocityLUT.add(0,0);
-        velocityLUT.add(0.1,210);
-        velocityLUT.add(0.2,430);
-        velocityLUT.add(0.3,660);
-        velocityLUT.add(0.4,880);
-        velocityLUT.add(0.5,1100);
-        velocityLUT.add(0.6,1320);
-        velocityLUT.add(0.7,1560);
-        velocityLUT.add(0.8,1760);
-        velocityLUT.add(1,2300);
+        velocityLUT.add(0.2,500);
+        velocityLUT.add(0.4,1000);
+        velocityLUT.add(0.6,1500);
+        velocityLUT.add(0.8,2000);
+        velocityLUT.add(1,2500);
         velocityLUT.createLUT();
     }
 
@@ -399,19 +392,13 @@ public class Meet2Auto extends LinearOpMode {
         }
     }
 
-    public void launcherSpinUp(boolean notMaxSpeed) {
-        double range=50;
-        boolean targetInSight = false;
+    public void launcherSpinUp() {
         double botX = currentPose.getX();
         double botY = currentPose.getY();
         double goalX = goalPose.getX();
         double goalY = goalPose.getY();
         odoRange = Math.hypot(goalX-botX,goalY-botY);
-        if (!targetInSight) {
-            range = odoRange;
-        }
-        if (notMaxSpeed) launcherTargetVelocity = calculateRangeLUT(range)-0.05;
-        else launcherTargetVelocity = calculateRangeLUT(range);
+        launcherTargetVelocity = calculateRangeLUT(odoRange);
     }
 
     public void turretTargetProcedure() {
@@ -420,15 +407,12 @@ public class Meet2Auto extends LinearOpMode {
     }
     public void turretTrackProcedure() {
         double turretAngle;
-        turretAngle = calculateTurretAngle();
+        turretAngle = calculateTurretAngle(currentPose.getX(), currentPose.getY(), Math.toDegrees((currentPose.getHeading())));
         turretAngle = turretAngleLimiter(turretAngle);
         turretTargetPos = turretAngleToTicks(turretAngle);
     }
 
-    public double calculateTurretAngle() {
-        double botX = currentPose.getX();
-        double botY = currentPose.getY();
-        double botHeading = Math.toDegrees(currentPose.getHeading());
+    public double calculateTurretAngle(double botX, double botY, double botHeading) {
         double goalX = goalPose.getX();
         double goalY = goalPose.getY();
         double targetAngle = Math.toDegrees(Math.atan2(goalY-botY,goalX-botX));
@@ -463,22 +447,18 @@ public class Meet2Auto extends LinearOpMode {
         } else if (realAngle < -180) {
             realAngle += 360;
         }
-        if (Math.abs(realAngle) > 160) {
+        if (Math.abs(realAngle) > 170) {
             return turretTicksToAngle(turretTargetPos);
         }
-        if (realAngle > 140) {
-            realAngle = 140;
-        } else if (realAngle < -140) {
-            realAngle = -140;
+        if (realAngle > 150) {
+            realAngle = 150;
+        } else if (realAngle < -150) {
+            realAngle = -150;
         }
         return realAngle;
     }
 
     public void updateTeamDependents() {
-        double signSwap = 1;
-        double Xorigin = 0;
-        double transform135=0;
-        double transform180=0;
         if (Objects.equals(team,"blue")){
             goalID = 20;
             goalOffset = 135;
@@ -504,38 +484,43 @@ public class Meet2Auto extends LinearOpMode {
         else return Math.toRadians(-(angle-90)+90);
     }
 
-    private Runnable activateTurret() {
-        turretState = "aiming";
-        launcherState = "preparing";
-        return null;
-    }
-
+    Runnable activateTurret = new Runnable() {
+        @Override
+        public void run() {
+            turretState = "idle";
+            launcherState = "preparing";
+        }
+    };
     private void autoStateMachine() {
+        double turretAngle;
         switch (autoState) {
             case -1:
                 break;
             case 0:
                 follower.followPath(StartToScore); // Move to scoring position
-                //launcherState = "firing";
                 autoState=1;
+                turretAngle = calculateTurretAngle(StartToScore.endPoint().getX(), StartToScore.endPoint().getY(), 135);
+                turretAngle = turretAngleLimiter(turretAngle);
+                turretTargetPos = turretAngleToTicks(turretAngle);
                 break;
             case 1:
                 if (!follower.isBusy()) { //Once move is finished
-                    launcherState = "firing"; //launch procedure
+                    launcherState = "beginLaunchSequence"; //launch procedure
                     turretState = "aiming";
                     intakeState = "idle";
                     launchTimer.reset();
 
                     autoState=2;
+
                 }
                 break;
             case 2:
-                if (launchTimer.seconds() > 1.5) { //Once artifacts are scored and not turning
+                if (launchTimer.seconds() > 2 || launcherisReady) { //Once artifacts are scored and not turning
                     turretState = "idle";
                     launcherState = "rejecting"; //intake mode
                     intakeState = "intaking";
-                    //follower.followPath(TurnToPPG);
                     follower.turnTo(a(180));
+                    ballsLaunched=0;
                     autoState = -10;
                 }
                 break;
@@ -544,6 +529,7 @@ public class Meet2Auto extends LinearOpMode {
                     follower.followPath(ScoreToPPG,intakeMaxPower,true); // Move to intake PPG
                     autoState = 3;
                 }
+                break;
             case 3:
                 if (!follower.isBusy()) { //Once move is finished
                     intakeState = "idle";
@@ -551,14 +537,15 @@ public class Meet2Auto extends LinearOpMode {
                     follower.followPath(PPGToScore); // Move to score position
                     autoState=4;
                     launchTimer.reset();
+                    turretAngle = calculateTurretAngle(PPGToScore.endPoint().getX(), PPGToScore.endPoint().getY(), 180);
+                    turretAngle = turretAngleLimiter(turretAngle);
+                    turretTargetPos = turretAngleToTicks(turretAngle);
+
                 }
                 break;
             case 4:
-                if (launchTimer.seconds() > 0) {
-                    //launcherState = "firing";
-                }
                 if (!follower.isBusy()) {
-                    launcherState = "firing"; //launch procedure
+                    launcherState = "beginLaunchSequence"; //launch procedure
                     turretState = "aiming";
                     intakeState = "idle";
                     launchTimer.reset();
@@ -566,11 +553,11 @@ public class Meet2Auto extends LinearOpMode {
                 }
                 break;
             case 5:
-                if (launchTimer.seconds()>1.5) { //Once launching is (hopefully) finished
+                if (launchTimer.seconds()>2.5 || launcherisReady) { //Once launching is (hopefully) finished
                     launcherState = "idle";
                     turretState = "idle";
                     intakeState = "idle";
-                    //follower.followPath(TurnToPGP);
+                    ballsLaunched=0;
                     follower.turnTo(a(256));
                     autoState=6;
                 }
@@ -591,20 +578,18 @@ public class Meet2Auto extends LinearOpMode {
                 break;
             case 8:
                 if (!follower.isBusy()) { // Once move is complete
-//                    try {
-//                        Thread.sleep(250);
-//                    } catch (InterruptedException e) {
-//                        Thread.currentThread().interrupt();
-//                    }
                     intakeState = "idle"; // Disable intake/launcher
                     launcherState = "rejecting"; // Run launcher backwards to push out stuck artifacts
                     follower.followPath(PGPToScore); // Go back to scoring position
                     autoState=9;
+                    turretAngle = calculateTurretAngle(PGPToScore.endPoint().getX(), PGPToScore.endPoint().getY(), 225);
+                    turretAngle = turretAngleLimiter(turretAngle);
+                    turretTargetPos = turretAngleToTicks(turretAngle);
                 }
                 break;
             case 9:
                 if (!follower.isBusy()) { // Once move is complete
-                    launcherState = "firing"; //launch procedure
+                    launcherState = "beginLaunchSequence"; //launch procedure
                     turretState = "aiming";
                     intakeState = "idle";
                     launchTimer.reset();
@@ -612,13 +597,14 @@ public class Meet2Auto extends LinearOpMode {
                 }
                 break;
             case -100: //don't want to disrupt order
-                if (!follower.isBusy()) {
+                if (!follower.isBusy() && ( launchTimer.seconds() > 2.5 || launcherisReady)){
+                    ballsLaunched=0;
                     follower.turnTo(a(270));
                     autoState = 10;
                 }
                 break;
             case 10:
-                if (launchTimer.seconds() > 3) { //If shooter is finished
+                if (!follower.isBusy()) { //If shooter is finished
                     launcherState = "idle";
                     turretState = "idle";
                     intakeState = "idle";
@@ -639,23 +625,39 @@ public class Meet2Auto extends LinearOpMode {
                     intakeState = "idle"; // Disable intake/launcher
                     launcherState = "rejecting"; // Run launcher backwards to push out stuck artifacts
                     follower.followPath(GPPToScore); // Go back to scoring position
+                    autoState = -1000;
+                    turretAngle = calculateTurretAngle(GPPToScore.endPoint().getX(), GPPToScore.endPoint().getY(), 240);
+                    turretAngle = turretAngleLimiter(turretAngle);
+                    turretTargetPos = turretAngleToTicks(turretAngle);
+                }
+                break;
+            case -1000:
+                if (!follower.isBusy()) {
+                    follower.turnTo(a(240));
                     autoState = 13;
                 }
                 break;
             case 13:
                 if (!follower.isBusy()) {
-                    launcherState = "firing"; //launch procedure
+                    launcherState = "beginLaunchSequence"; //launch procedure
                     turretState = "aiming";
                     intakeState = "idle";
                     launchTimer.reset();
+                    autoState = -3;
+                }
+                break;
+            case -3:
+                if (launchTimer.seconds() > 3 || launcherisReady) {
+                    follower.turnTo(a(258));
                     autoState = 14;
                 }
                 break;
             case 14:
-                if (launchTimer.seconds() > 1.5) {
+                if (!follower.isBusy()) {
                     launcherState = "idle";
                     turretState = "idle";
                     intakeState = "idle";
+                    ballsLaunched=0;
                     autoState = 15;
                 }
                 break;
@@ -681,14 +683,14 @@ public class Meet2Auto extends LinearOpMode {
                 .pathBuilder()
                 .addPath(
                         new BezierCurve(
-                                new Pose(x(29.5), 135.5),
+                                new Pose(startPose.getY(), startPose.getX()),
                                 new Pose(x(29.5), 106.5),
                                 new Pose(x(52), 84)
                         )
                 )
                 .setTangentHeadingInterpolation()
                 .setReversed()
-                .addParametricCallback(50,activateTurret())
+                .addParametricCallback(.25, activateTurret)
                 .build();
         TurnToPPG = follower
                 .pathBuilder()
@@ -715,7 +717,7 @@ public class Meet2Auto extends LinearOpMode {
                 )
                 .setTangentHeadingInterpolation()
                 .setReversed()
-                .addParametricCallback(50,activateTurret())
+                .addParametricCallback(.25,activateTurret)
                 .build();
 
         TurnToPGP = follower
@@ -759,7 +761,7 @@ public class Meet2Auto extends LinearOpMode {
                 )
                 .setTangentHeadingInterpolation()
                 .setReversed()
-                .addParametricCallback(50,activateTurret())
+                .addParametricCallback(.25,activateTurret)
                 .build();
 
         ScoreWait3 = 1000;
@@ -803,7 +805,7 @@ public class Meet2Auto extends LinearOpMode {
                 )
                 .setTangentHeadingInterpolation()
                 .setReversed()
-                .addParametricCallback(50,activateTurret())
+                .addParametricCallback(.25,activateTurret)
                 .build();
 
         ScoreWait3 = 1000;
