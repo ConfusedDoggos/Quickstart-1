@@ -102,6 +102,7 @@ public class Meet2Auto extends LinearOpMode {
     private InterpLUT velocityLUT = new InterpLUT(), rangeLUT= new InterpLUT();
 
     //Launcher Variables
+    public static double launchTime = 1.5;
     public static double kp = 1.5;
     public static double ki = 200;
     public static double kd = 0;
@@ -110,12 +111,12 @@ public class Meet2Auto extends LinearOpMode {
     public double odoRange = 0;
     public int ballsLaunched = 0;
     public static double launchDelaySeconds = 0.15;
-    public static double shooterSpeedGap = 50;
+    public static double shooterSpeedGap = 40;
     public double previousVelocity = 0;
 
     //Intake Variables
     public static double intakePickupSpeed = .9;
-    public static double transferLoadSpeed = 1;
+    public static double transferLoadSpeed = .75;
     public static double intakeRejectSpeed = -0.5;
 
     //Turret Variables
@@ -321,7 +322,6 @@ public class Meet2Auto extends LinearOpMode {
                 }
             case "firing":
                 launcherSpinUp();
-                checkForLaunch();
                 launcher.set(launcherTargetVelocity);
                 if (Objects.equals(turretState,"aiming")) {
                     intakeState = "idle";
@@ -340,21 +340,6 @@ public class Meet2Auto extends LinearOpMode {
         }
     }
 
-    public void checkForLaunch() {
-        if (Math.abs(launcher.getVelocity()) <= Math.abs(velocityLUT.get(launcherTargetVelocity))-shooterSpeedGap*1.5) {
-            ballsLaunched += 1;
-            intakeState = "idle";
-            launcherState = "aiming";
-            ballTimer.reset();
-        }
-        if (ballsLaunched >= 3) {
-            launcherState = "idle";
-            turretState = "idle";
-            intakeState = "idle";
-            launcherisReady = true;
-            ballsLaunched = 0;
-        }
-    }
 
     public void createLUTs() {
         //create shooting speed lookup table
@@ -515,7 +500,7 @@ public class Meet2Auto extends LinearOpMode {
                 }
                 break;
             case 2:
-                if (launchTimer.seconds() > 2 || launcherisReady) { //Once artifacts are scored and not turning
+                if (launchTimer.seconds() > launchTime || launcherisReady) { //Once artifacts are scored and not turning
                     turretState = "idle";
                     launcherState = "rejecting"; //intake mode
                     intakeState = "intaking";
@@ -553,7 +538,7 @@ public class Meet2Auto extends LinearOpMode {
                 }
                 break;
             case 5:
-                if (launchTimer.seconds()>2.5 || launcherisReady) { //Once launching is (hopefully) finished
+                if (launchTimer.seconds()>launchTime || launcherisReady) { //Once launching is (hopefully) finished
                     launcherState = "idle";
                     turretState = "idle";
                     intakeState = "idle";
@@ -597,7 +582,7 @@ public class Meet2Auto extends LinearOpMode {
                 }
                 break;
             case -100: //don't want to disrupt order
-                if (!follower.isBusy() && ( launchTimer.seconds() > 2.5 || launcherisReady)){
+                if (!follower.isBusy() && ( launchTimer.seconds() > launchTime || launcherisReady)){
                     ballsLaunched=0;
                     follower.turnTo(a(270));
                     autoState = 10;
@@ -647,7 +632,7 @@ public class Meet2Auto extends LinearOpMode {
                 }
                 break;
             case -3:
-                if (launchTimer.seconds() > 3 || launcherisReady) {
+                if (launchTimer.seconds() > launchTime || launcherisReady) {
                     follower.turnTo(a(258));
                     autoState = 14;
                 }
