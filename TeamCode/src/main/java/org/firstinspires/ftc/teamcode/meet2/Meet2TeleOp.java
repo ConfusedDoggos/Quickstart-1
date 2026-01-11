@@ -101,6 +101,7 @@ public class Meet2TeleOp extends LinearOpMode {
     private double goalOffset;
     private boolean turretAimed = false;
     private boolean turretManualControl = false;
+    private double backlashOffset = 2;
 
     //The variable to store our instance of the vision portal.
 
@@ -164,18 +165,16 @@ public class Meet2TeleOp extends LinearOpMode {
 //        telemetryM.addData("Range",odoRange);
         telemetryM.addData("X",currentPose.getX());
         telemetryM.addData("Y",currentPose.getY());
-        telemetryM.addData("Heading",currentPose.getHeading());
+        telemetryM.addData("Heading",Math.toDegrees(currentPose.getHeading()));
         //telemetryM.addData("Auto State",autoState);
         //telemetryM.addData("Launcher State",launcherState);
         //telemetryM.addData("Launcher Timer", launchTimer);
         telemetryM.addData("Launcher Velocity",launcher.getVelocity());
-        telemetryM.addData("Launcher Previous Velocity",previousVelocity);
-        telemetryM.addData("Launcher Previous^2 Velocity",previousPreviousVelocity);
         telemetryM.addData("Turret Target",turretTargetPos);
         telemetryM.addData("Turret Pos",turret.getCurrentPosition());
         telemetryM.addData("Balls Launched",ballsLaunched);
         telemetryM.addData("BallTimer",ballTimer);
-        telemetryM.update();
+        telemetryM.addData("Goal Distance",odoRange);
     }
 
     public void initMotors() {
@@ -228,14 +227,16 @@ public class Meet2TeleOp extends LinearOpMode {
 
     public void DriverInput() {
         //DT Section
-        if (gamepad1.left_bumper) {
-             drive.setMaxSpeed(0.7);
-        } else {
-            drive.setMaxSpeed(1);
-        }
         strafeInput = gamepad1.left_stick_x;
         driveInput = -gamepad1.left_stick_y;
         turnInput = gamepad1.right_stick_x;
+        if (gamepad1.left_bumper) {
+            drive.setMaxSpeed(0.7);
+            turnInput *= (0.5/0.7);
+        } else {
+            if (Math.abs(driveInput) > 0.7 && Math.abs(strafeInput) < 0.3) strafeInput = 0;
+            drive.setMaxSpeed(1);
+        }
 
         /*if (gamepad1.left_stick_button && gamepad1.right_stick_button) {
             follower.setPose(new Pose(currentPose.getX(),currentPose.getY(),Math.toRadians(90)));
@@ -436,10 +437,11 @@ public class Meet2TeleOp extends LinearOpMode {
         rangeLUT.add(20,0.43);
         rangeLUT.add(48,0.43);
         rangeLUT.add(55,0.43);
-        rangeLUT.add(65.7,0.445);
-        rangeLUT.add(75,0.465);
-        rangeLUT.add(85,0.485);
-        rangeLUT.add(100,.525);
+        rangeLUT.add(65.7,0.45);
+        rangeLUT.add(75,0.475);
+        rangeLUT.add(85,0.5);
+        rangeLUT.add(100,.53);
+        rangeLUT.add(110,0.55);
         rangeLUT.createLUT();
 
         velocityLUT.add(-1,2500);
@@ -457,7 +459,7 @@ public class Meet2TeleOp extends LinearOpMode {
     }
 
     public double calculateRangeLUT(double input) {
-        if (input < 20 || input > 100) {
+        if (input < 20 || input > 110) {
             return 0.45;
         } else {
             return rangeLUT.get(input);
@@ -488,7 +490,7 @@ public class Meet2TeleOp extends LinearOpMode {
         double goalX = goalPose.getX();
         double goalY = goalPose.getY();
         double targetAngle = Math.toDegrees(Math.atan2(goalY-botY,goalX-botX));
-        targetAngle -= botHeading;
+        targetAngle -= botHeading - backlashOffset;
         telemetryM.addData("Target Angle",targetAngle);
         return targetAngle;
     }
@@ -535,12 +537,12 @@ public class Meet2TeleOp extends LinearOpMode {
         if (Objects.equals(team,"blue")){
             goalID = 20;
             startPose = new Pose(18.5,118.5,Math.toRadians(144));
-            goalPose = new Pose(0,144,Math.toRadians(135));
+            goalPose = new Pose(0,140,Math.toRadians(135));
             aprilTagPose = new Pose(15,130,0);
         } else if (Objects.equals(team,"red")) {
             goalID = 24;
             startPose = new Pose(125.5,134,Math.toRadians(36));
-            goalPose = new Pose(144,144,Math.toRadians(45));
+            goalPose = new Pose(144,140,Math.toRadians(45));
             aprilTagPose = new Pose(129,130,0);
         }
     }

@@ -349,10 +349,10 @@ public class Meet2Auto extends LinearOpMode {
         rangeLUT.add(20,0.43);
         rangeLUT.add(48,0.43);
         rangeLUT.add(55,0.43);
-        rangeLUT.add(65.7,0.46);
-        rangeLUT.add(75,0.475);
-        rangeLUT.add(85,0.505);
-        rangeLUT.add(100,.525);
+        rangeLUT.add(65.7,0.465);
+        rangeLUT.add(75,0.48);
+        rangeLUT.add(85,0.515);
+        rangeLUT.add(100,.535);
         rangeLUT.createLUT();
 
         velocityLUT.add(-1,2500);
