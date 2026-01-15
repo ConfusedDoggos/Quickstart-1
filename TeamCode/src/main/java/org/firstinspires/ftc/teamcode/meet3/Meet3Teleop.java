@@ -1,4 +1,4 @@
-package org.firstinspires.ftc.teamcode.meet2;
+package org.firstinspires.ftc.teamcode.meet3;
 
 import static org.firstinspires.ftc.teamcode.meet2.Meet2Auto.shooterSpeedGap;
 import static org.firstinspires.ftc.teamcode.pedroPathing.Tuning.follower;
@@ -10,7 +10,6 @@ import com.bylazar.telemetry.TelemetryManager;
 import com.bylazar.utils.LoopTimer;
 import com.pedropathing.geometry.Pose;
 import com.qualcomm.hardware.lynx.LynxModule;
-import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.util.ElapsedTime;
@@ -28,11 +27,9 @@ import org.firstinspires.ftc.vision.VisionPortal;
 import java.util.List;
 import java.util.Objects;
 
-@TeleOp(name = "Meet 2 Teleop")
-@Disabled
+@TeleOp(name = "Meet 3 Teleop")
 @Configurable
-public class Meet2TeleOp extends LinearOpMode {
-
+public class Meet3Teleop extends LinearOpMode {
 
     @IgnoreConfigurable
     static TelemetryManager telemetryM;
@@ -42,9 +39,7 @@ public class Meet2TeleOp extends LinearOpMode {
     //Pedropathing Variables
     private Pose currentPose;
 
-    private final ElapsedTime ballTimer = new ElapsedTime(ElapsedTime.Resolution.SECONDS);
     private final ElapsedTime launchTimer = new ElapsedTime(ElapsedTime.Resolution.SECONDS);
-    private final ElapsedTime detectTimer = new ElapsedTime(ElapsedTime.Resolution.SECONDS);
 
     private MotorEx fL, fR, bL, bR, launcher1, launcher2, turret, intake;
     private String DTState="drive", intakeState="idle", turretState="idle", launcherState="idle";
@@ -76,7 +71,6 @@ public class Meet2TeleOp extends LinearOpMode {
     private double launcherTargetVelocity;
     public static double launcherTestSpeed = 0.6;
     public double odoRange = 0;
-    public double ballsLaunched =0;
 
     //Intake Variables
     public static double intakePickupSpeed = .8;
@@ -97,7 +91,6 @@ public class Meet2TeleOp extends LinearOpMode {
     private boolean turretAngleLimited = false;
     private double turretDriftOffset = 0;
     private boolean driftAdjustToggle = false;
-    private boolean dpadRightToggle = false;
 
     //The variable to store our instance of the vision portal.
 
@@ -243,7 +236,7 @@ public class Meet2TeleOp extends LinearOpMode {
             intakeState = "idle";
             launchTimer.reset();
         }
-        
+
         //Turret Section
         if (Math.abs(gamepad2.left_stick_x) > 0.1) {
             turretManualControl = true;
@@ -309,6 +302,7 @@ public class Meet2TeleOp extends LinearOpMode {
                 break;
         }
     }
+
     public void turretTeleOp() {
 
         switch (turretState){
@@ -337,6 +331,7 @@ public class Meet2TeleOp extends LinearOpMode {
         }
         if (!turretManualControl) turretControlLoop();
     }
+
     public void launcherTeleOp() {
         double botX = currentPose.getX();
         double botY = currentPose.getY();
@@ -396,7 +391,6 @@ public class Meet2TeleOp extends LinearOpMode {
         }
     }
 
-
     public void createLUTs() {
         //create shooting speed lookup table
 
@@ -448,6 +442,7 @@ public class Meet2TeleOp extends LinearOpMode {
         if (!turretAngleLimited) angleError = turretTicksToAngle(turretTargetPos-turret.getCurrentPosition());
         else angleError = 100;
     }
+
     public void turretTrackProcedure() {
         double turretAngle;
         turretAngle = calculateTurretAngle(currentPose.getX(), currentPose.getY(), Math.toDegrees((currentPose.getHeading())));
@@ -475,7 +470,6 @@ public class Meet2TeleOp extends LinearOpMode {
         if (Math.abs(turretPIDF.getPositionError()) <= turretTolerance) turret.stopMotor();
         turret.set(output);
     }
-
 
     public int turretAngleToTicks(double angle) {
         return (int) (angle * 3638.7 / 360); //978.7 with 435

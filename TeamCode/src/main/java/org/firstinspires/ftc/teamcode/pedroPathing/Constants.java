@@ -26,8 +26,8 @@ public class Constants {
             .translationalPIDFCoefficients(new PIDFCoefficients(0.1, 0, 0.01, 0.11))
             .headingPIDFCoefficients(new PIDFCoefficients(1, 0, 0, 0.01))
             .secondaryHeadingPIDFCoefficients(new PIDFCoefficients(2,0,0.1,0.01))
-            .drivePIDFCoefficients(new FilteredPIDFCoefficients(0.009,0,0.00001,.6,0.03))
-            .secondaryDrivePIDFCoefficients(new FilteredPIDFCoefficients(0.01,0,0.000005,0.6,0.005))
+            .drivePIDFCoefficients(new FilteredPIDFCoefficients(0.008,0,0.00001,.6,0.03))
+            .secondaryDrivePIDFCoefficients(new FilteredPIDFCoefficients(0.008,0,0.000005,0.6,0.005))
             .forwardZeroPowerAcceleration(-62.8563)
             .lateralZeroPowerAcceleration(-95.8876)
             .mass(9.3)
@@ -54,13 +54,13 @@ public class Constants {
             .encoderResolution(GoBildaPinpointDriver.GoBildaOdometryPods.goBILDA_4_BAR_POD)
             .forwardEncoderDirection(GoBildaPinpointDriver.EncoderDirection.REVERSED)
             .strafeEncoderDirection(GoBildaPinpointDriver.EncoderDirection.FORWARD);
-    public static PathConstraints pathConstraints = new PathConstraints(0.99, 75, 0.68,10);
+    public static PathConstraints pathConstraints = new PathConstraints(0.99, 75, 0.65,1);
 
     public static Follower createFollower(HardwareMap hardwareMap) {
         return new FollowerBuilder(followerConstants, hardwareMap)
+                .mecanumDrivetrain(driveConstants)
                 .pinpointLocalizer(localizerConstants)
                 .pathConstraints(pathConstraints)
-                .mecanumDrivetrain(driveConstants)
                 .build();
     }
 }
