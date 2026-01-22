@@ -51,11 +51,12 @@ public class Meet3Auto extends LinearOpMode {
     //Panels Editable Variables
     public static double intakeMaxPower = 1.0;
     public static double rampMaxPower = 1;
-    public static double gateWaitTime = .9;
-    public static double launchTime15 = 1.3;
-    public static double gateWait15 = 1.6;
-    public static double intakeMaxPower15 = 0.8;
+    public static double gateWaitTime = 1.4;
+    public static double launchTime15 = 1.15;
+    public static double gateWait15 = 1.4;
+    public static double intakeMaxPower15 = 0.7;
     public static double rampMaxPower15 = 0.6;
+    public static double farLaunchTime = 2.5;
     public static Pose endPosition = new Pose(0,0,0);
 
     public double selectedAuto = 15; //default 15 ball
@@ -97,6 +98,7 @@ public class Meet3Auto extends LinearOpMode {
     public PathChain PGPIntake15;
     public PathChain PGPToScore15;
     public PathChain ScoreToRamp115;
+    public PathChain ScoreToRamp215;
     public PathChain IntakeRamp15;
     public PathChain RampToScore115;
     public PathChain RampToScore215;
@@ -106,6 +108,13 @@ public class Meet3Auto extends LinearOpMode {
     public PathChain GPPIntake15;
     public PathChain GPPToScore15one;
     public PathChain Park15;
+    public PathChain farScoreToGPP;
+    public PathChain farGPPIntake;
+    public PathChain farGPPIntakeToScore;
+    public PathChain farScoreToCorner;
+    public PathChain cornerIntake;
+    public PathChain cornerToFarScore;
+    public PathChain farPark;
 
     //Changing variables
     public int autoState = 0;
@@ -117,7 +126,7 @@ public class Meet3Auto extends LinearOpMode {
     private MecanumDrive drive;
 
     //Team Dependents
-    private String team = "blue";
+    public static String team = "blue";
     private double goalID = 20;
     private Pose goalPose;
     private Pose aprilTagPose;
@@ -167,7 +176,7 @@ public class Meet3Auto extends LinearOpMode {
         follower= Constants.createFollower(hardwareMap);
         while (opModeInInit()) {
             telemetry.addLine("Driver: Press left stick for blue team and right stick for red team");
-            telemetry.addLine("A for 12 ball, X for 15 ball, B for 18 ball");
+            telemetry.addLine("A for 12 ball, X for 15 ball, B for 18 ball, Y for far zone (9)");
             telemetry.addData("Team Selected:", team);
             telemetry.addData("Auto Selected:",selectedAuto);
             telemetry.update();
@@ -179,6 +188,7 @@ public class Meet3Auto extends LinearOpMode {
             if (gamepad1.a) selectedAuto = 12;
             else if (gamepad1.x) selectedAuto = 15;
             else if (gamepad1.b) selectedAuto = 18;
+            else if (gamepad1.y) selectedAuto = 9;
         }
         updateTeamDependents();
         follower.setStartingPose(startPose);
@@ -187,6 +197,7 @@ public class Meet3Auto extends LinearOpMode {
         if (selectedAuto == 12) buildPaths12(); //Initialize all Pedro Paths
         if (selectedAuto == 15) buildPaths15();
         if (selectedAuto == 18) buildPaths18();
+        if (selectedAuto == 9) buildPaths9();
 
         List<LynxModule> hubs = hardwareMap.getAll(LynxModule.class);
         hubs.forEach(hub -> hub.setBulkCachingMode(LynxModule.BulkCachingMode.MANUAL)); //Bulk read to reduce loop time
@@ -205,12 +216,14 @@ public class Meet3Auto extends LinearOpMode {
             if (selectedAuto == 12) autoStateMachine12(); //Overall state machine function to simplify code
             if (selectedAuto == 15) autoStateMachine15();
             if (selectedAuto == 18) autoStateMachine18();
+            if (selectedAuto == 9) autoStateMachine9();
 
             auto(); //All subsystems
 
             updateTelemetry();
             telemetryM.update(telemetry);
         }
+        endPosition = follower.getPose();
     }
 
     private void updateTelemetry() {
@@ -278,7 +291,8 @@ public class Meet3Auto extends LinearOpMode {
                 intake.set(0);
                 break;
             case "firing":
-                intake.set(transferLoadSpeed);
+                if (Math.abs(intake.getVelocity()) < 300) intake.set(1.0);
+                else intake.set(transferLoadSpeed);
                 break;
             case "intaking":
                 intake.set(intakePickupSpeed);
@@ -392,8 +406,13 @@ public class Meet3Auto extends LinearOpMode {
         rangeLUT.add(65.7,0.445);
         rangeLUT.add(75,0.47);
         rangeLUT.add(85,0.495);
-        rangeLUT.add(100,.525);
-        rangeLUT.add(110,0.545);
+        rangeLUT.add(100,.53);
+        rangeLUT.add(110,0.55);
+        rangeLUT.add(115,0.57);
+        rangeLUT.add(123,0.67);
+        rangeLUT.add(130,0.67);
+        rangeLUT.add(140,0.74);
+        rangeLUT.add(160,0.79);
         rangeLUT.createLUT();
 
         velocityLUT.add(-1,2500);
@@ -411,8 +430,10 @@ public class Meet3Auto extends LinearOpMode {
     }
 
     public double calculateRangeLUT(double input) {
-        if (input < 20 || input > 110) {
-            return 0.45;
+        if (input < 20 || input > 160) {
+            if (input > 110) transferLoadSpeed = 0.6;
+            else transferLoadSpeed = 1.0;
+            return launcherTestSpeed;
         } else {
             return rangeLUT.get(input);
         }
@@ -451,12 +472,15 @@ public class Meet3Auto extends LinearOpMode {
     public void turretControlLoop() {
         double output = turretPIDF.calculate(turret.getCurrentPosition(),turretTargetPos);
         double kSFriction;
-        if (Math.abs(turretPIDF.getPositionError()) <= turretTolerance) kSFriction = 0;
+        if (Math.abs(turretPIDF.getPositionError()) <= turretTolerance) {
+            kSFriction = 0;
+            turret.stopMotor();
+        }
         else {
             kSFriction = tkSCustom * (Math.abs(turretPIDF.getPositionError()) / turretPIDF.getPositionError());
+            output += kSFriction;
+            turret.set(output);
         }
-        output += kSFriction;
-        turret.set(output);
     }
 
     public void premoveTurret(double x, double y,double heading) {
@@ -471,11 +495,11 @@ public class Meet3Auto extends LinearOpMode {
     }
 
     public int turretAngleToTicks(double angle) {
-        return (int) (angle * 3638.7 / 360); //978.7 with 435
+        return (int) (angle * 978.7 / 360); //978.7 with 435
     }
 
     public int turretTicksToAngle(double ticks) {
-        return (int) (ticks * 360 / 3638.7); //978.7 with 435
+        return (int) (ticks * 360 / 978.7); //978.7 with 435
     }
 
     public double turretAngleLimiter(double angleAttempt) {
@@ -485,13 +509,13 @@ public class Meet3Auto extends LinearOpMode {
         } else if (realAngle < -180) {
             realAngle += 360;
         }
-        if (Math.abs(realAngle) > 170) {
+        if ((realAngle > 160 && turret.getCurrentPosition() < 0) || (realAngle < -160 && turret.getCurrentPosition() > 0)) {
             return turretTicksToAngle(turretTargetPos);
         }
-        if (realAngle > 150) {
-            realAngle = 150;
-        } else if (realAngle < -150) {
-            realAngle = -150;
+        if (realAngle > 140) {
+            realAngle = 140;
+        } else if (realAngle < -140) {
+            realAngle = -140;
         }
         return realAngle;
     }
@@ -499,13 +523,15 @@ public class Meet3Auto extends LinearOpMode {
     public void updateTeamDependents() {
         if (Objects.equals(team,"blue")){
             goalID = 20;
-            startPose = new Pose(18.5,118.5,Math.toRadians(142));
+            if (selectedAuto == 9) startPose = new Pose (54,7,Math.toRadians(90));
+            else startPose = new Pose(18.5,118.5,Math.toRadians(143));
             goalPose = new Pose(0,144,Math.toRadians(135));
             aprilTagPose = new Pose(15,130,0);
             backLashOffset = 1;
         } else if (Objects.equals(team,"red")) {
             goalID = 24;
-            startPose = new Pose(125.5,134,Math.toRadians(38));
+            if (selectedAuto == 9) startPose = new Pose(90,7,Math.toRadians(90));
+            else startPose = new Pose(x(18.5),118.5,a(143));
             goalPose = new Pose(144,144,Math.toRadians(45));
             aprilTagPose = new Pose(129,130,0);
             backLashOffset = -1;
@@ -514,7 +540,7 @@ public class Meet3Auto extends LinearOpMode {
 
     public double x(double X) { //transform X based on team
         if (Objects.equals(team, "blue")) return X;
-        else return 144-(-1*X);
+        else return 144-(X);
     }
 
     public double a(double angle) { //transform heading based on team
@@ -560,11 +586,166 @@ public class Meet3Auto extends LinearOpMode {
         }
     };
 
+    public void autoStateMachine9() {
+        switch (autoState) {
+            case -1:
+                break;
+            case 0:
+                transferLoadSpeed = 0.6;
+                launchBalls();
+                autoState = 1;
+                break;
+            case 1:
+                if (launchTimer.seconds() > farLaunchTime + 1) {
+                    resetSubsystems();
+                    follower.followPath(farScoreToGPP);
+                    autoState = 2;
+                }
+                break;
+            case 2:
+                if (!follower.isBusy()) {
+                    intakeBalls();
+                    follower.followPath(farGPPIntake,intakeMaxPower15,true);
+                    autoState = 3;
+                }
+                break;
+            case 3:
+                if (!follower.isBusy()) {
+                    resetSubsystems();
+                    launcherState = "rejecting";
+                    intakeState = "intaking";
+                    premoveTurret(x(55),12,Math.toDegrees(a(149)));
+                    follower.followPath(farGPPIntakeToScore);
+                    autoState = 4;
+                }
+                break;
+            case 4:
+                if (!follower.isBusy()) {
+                    launchBalls();
+                    autoState = 5;
+                }
+                break;
+            case 5:
+                if (launchTimer.seconds() > farLaunchTime) {
+                    resetSubsystems();
+                    follower.followPath(farScoreToCorner);
+                    autoState = 6;
+                }
+                break;
+            case 6:
+                if (!follower.isBusy()) {
+                    intakeBalls();
+                    follower.followPath(cornerIntake,intakeMaxPower15,true);
+                    waitTimer.reset();
+                    autoState = 7;
+                }
+                break;
+            case 7:
+                if (!follower.isBusy() || waitTimer.seconds() > 1.75) {
+                    resetSubsystems();
+                    launcherState = "rejecting";
+                    intakeState = "intaking";
+                    premoveTurret(x(54),14,Math.toDegrees(a(180)));
+                    follower.followPath(cornerToFarScore);
+                    autoState = 8;
+                }
+                break;
+            case 8:
+                if (!follower.isBusy()) {
+                    launchBalls();
+                    autoState = 9;
+                }
+                break;
+            case 9:
+                if (launchTimer.seconds() > farLaunchTime) {
+                    resetSubsystems();
+                    follower.followPath(farPark);
+                    autoState = 10;
+                }
+                break;
+            case 10:
+                if (!follower.isBusy()) {
+                    autoState = 11;
+                }
+                break;
+            case 11:
+                telemetryM.addLine("Autonomous Complete!!! :D");
+                endPosition = follower.getPose();
+                break;
+        }
+    }
+
+    public void buildPaths9() {
+        farScoreToGPP = follower
+                .pathBuilder()
+                .addPath(
+                        new BezierLine(new Pose(x(54), 7), new Pose(x(54), 36))
+                )
+                .setLinearHeadingInterpolation(a(90), a(180),0.8)
+                .build();
+
+        farGPPIntake = follower
+                .pathBuilder()
+                .addPath(
+                        new BezierLine(new Pose(x(54), 36), new Pose(x(15), 36))
+                )
+                .setTangentHeadingInterpolation()
+                .build();
+
+        farGPPIntakeToScore = follower
+                .pathBuilder()
+                .addPath(
+                        new BezierLine(new Pose(x(15), 36), new Pose(x(55), 12))
+                )
+                .setTangentHeadingInterpolation()
+                .setReversed()
+                .addTemporalCallback(200,stopIntake)
+                .addTemporalCallback(300, rejectIntake)
+                .addTemporalCallback(400, stopIntake)
+                .addTemporalCallback(500, preSpinLauncher)
+                .build();
+
+        farScoreToCorner = follower
+                .pathBuilder()
+                .addPath(
+                        new BezierLine(new Pose(x(55), 12), new Pose(x(10), 33))
+                )
+                .setLinearHeadingInterpolation(a(145), a(270),0.8)
+                .build();
+
+        cornerIntake = follower
+                .pathBuilder()
+                .addPath(new BezierLine(new Pose(x(7), 36), new Pose(x(7), 13)))
+                .setTangentHeadingInterpolation()
+                .build();
+
+        cornerToFarScore = follower
+                .pathBuilder()
+                .addPath(
+                        new BezierLine(new Pose(x(7), 13), new Pose(x(54), 14))
+                )
+                .setLinearHeadingInterpolation(a(270), a(180),0.8)
+                .addTemporalCallback(200,stopIntake)
+                .addTemporalCallback(300, rejectIntake)
+                .addTemporalCallback(400, stopIntake)
+                .addTemporalCallback(500, preSpinLauncher)
+                .build();
+
+        farPark = follower
+                .pathBuilder()
+                .addPath(
+                        new BezierLine(new Pose(x(54),14), new Pose(x(35),14))
+                )
+                .setTangentHeadingInterpolation()
+                .build();
+    }
+
     public void autoStateMachine18() {
         switch (autoState) {
             case -1:
                 break;
             case 0:
+                transferLoadSpeed = 1.0;
                 follower.followPath(StartToScore);
                 autoState = 1;
                 premoveTurret(x(45),92,Math.toDegrees(a(135)));
@@ -619,7 +800,7 @@ public class Meet3Auto extends LinearOpMode {
                 }
                 break;
             case 8:
-                if (follower.atParametricEnd() && follower.getHeadingError() < follower.getCurrentPath().getPathEndHeadingConstraint()) {
+                if (follower.getTranslationalError().getMagnitude() < 2) {
                     follower.followPath(IntakeRamp,rampMaxPower,true);
                     intakeBalls();
                     launcherState = "rejectFaster";
@@ -629,7 +810,7 @@ public class Meet3Auto extends LinearOpMode {
             case 9:
                 if (!follower.isBusy()) {
                     autoState = 10;
-                    follower.holdPoint(new Pose(x(13),59.5,a(140)));
+                    follower.holdPoint(new Pose(x(12.5),59.5,a(140)));
                     waitTimer.reset();
                 }
                 break;
@@ -663,10 +844,11 @@ public class Meet3Auto extends LinearOpMode {
                 }
                 break;
             case 14:
-                if (follower.atParametricEnd() && follower.getHeadingError() < follower.getCurrentPath().getPathEndHeadingConstraint()) {
+                if (follower.getTranslationalError().getMagnitude() < 2) {
                     follower.followPath(IntakeRamp,rampMaxPower,true);
                     intakeBalls();
                     launcherState = "rejectFaster";
+                    telemetryM.addData("Drive error",follower.getTranslationalError().getMagnitude());
                     autoState = 15;
                 }
                 break;
@@ -674,7 +856,7 @@ public class Meet3Auto extends LinearOpMode {
                 if (!follower.isBusy()) {
                     autoState = 16;
                     waitTimer.reset();
-                    follower.holdPoint(new Pose(x(13),59.5,a(140)));
+                    follower.holdPoint(new Pose(x(12.5),59.5,a(140)));
                 }
                 break;
             case 16:
@@ -688,7 +870,7 @@ public class Meet3Auto extends LinearOpMode {
                 }
                 break;
             case -6:
-                if (follower.atParametricEnd()) {
+                if (follower.getDriveError() < 2) {
                     follower.followPath(RampToScore2);
                     autoState = 17;
                 }
@@ -795,7 +977,7 @@ public class Meet3Auto extends LinearOpMode {
                 .setTangentHeadingInterpolation()
                 .setReversed()
                 .addTemporalCallback(500, preSpinLauncher)
-                .setBrakingStrength(0.65)
+                .setBrakingStrength(0.68)
                 .build();
 
         ScoreToPGP18 = follower
@@ -804,7 +986,7 @@ public class Meet3Auto extends LinearOpMode {
                         new BezierLine(new Pose(x(45), 92), new Pose(x(45), 60))
                 )
                 .setLinearHeadingInterpolation(a(135), a(180),0.8)
-                .setBrakingStrength(0.6)
+                //.setBrakingStrength(0.6)
                 .build();
 
         PGPIntake18 = follower
@@ -813,7 +995,7 @@ public class Meet3Auto extends LinearOpMode {
                         new BezierLine(new Pose(x(45), 60), new Pose(x(22), 60))
                 )
                 .setTangentHeadingInterpolation()
-                .setBrakingStrength(0.6)
+                //.setBrakingStrength(0.6)
                 .build();
 
         PGPToScore18 = follower
@@ -843,7 +1025,7 @@ public class Meet3Auto extends LinearOpMode {
                 .addPath(
                         new BezierLine(
                                 new Pose(x(32), 59.5),
-                                new Pose(x(13), 59.5)
+                                new Pose(x(12.5), 59.5)
                         )
                 )
                 .setConstantHeadingInterpolation(a(140))
@@ -962,12 +1144,13 @@ public class Meet3Auto extends LinearOpMode {
             case -1:
                 break;
             case 0:
+                transferLoadSpeed = 1.0;
                 follower.followPath(startToScore15);
                 autoState = 1;
                 premoveTurret(x(45),92,Math.toDegrees(a(135)));
                 break;
             case 1:
-                if (!follower.isBusy()) {
+                if (!follower.isBusy() && follower.getVelocity().getMagnitude() < 1.0) {
                     launchBalls();
                     waitTimer.reset();
                     autoState = 3;
@@ -993,12 +1176,12 @@ public class Meet3Auto extends LinearOpMode {
                     launcherState = "rejecting";
                     intakeState = "intaking";
                     follower.followPath(PGPToScore15);
-                    premoveTurret(x(48),84,Math.toDegrees(a(223)));
+                    premoveTurret(x(50),84,Math.toDegrees(a(219)));
                     autoState = 6;
                 }
                 break;
             case 6:
-                if (!follower.isBusy()) {
+                if (!follower.isBusy() && follower.getVelocity().getMagnitude() < 1.0) {
                     launchBalls();
                     autoState = 7;
                 }
@@ -1007,12 +1190,24 @@ public class Meet3Auto extends LinearOpMode {
                 if (launchTimer.seconds() > launchTime15) {
                     resetSubsystems();
                     follower.followPath(ScoreToRamp115);
+                    autoState = -8;
+                }
+                break;
+            case -8:
+                if (!follower.isBusy()) {
+                    follower.followPath(ScoreToRamp215,rampMaxPower15,true);
+                    autoState = -9;
+                    waitTimer.reset();
+                }
+                break;
+            case -9:
+                if (waitTimer.seconds() > 0.4) {
                     autoState = 8;
                 }
                 break;
             case 8:
                 if (!follower.isBusy()) {
-                    follower.followPath(IntakeRamp15,rampMaxPower15,true);
+                    follower.followPath(IntakeRamp15);
                     intakeBalls();
                     launcherState = "rejectFaster";
                     autoState = 9;
@@ -1021,16 +1216,17 @@ public class Meet3Auto extends LinearOpMode {
             case 9:
                 if (!follower.isBusy()) {
                     autoState = 10;
-                    follower.holdPoint(new Pose(x(13),59.5,a(140)));
+                    follower.holdPoint(new Pose(x(13),52,a(140)));
                     waitTimer.reset();
                 }
+
                 break;
             case 10:
                 if (waitTimer.seconds() > gateWait15) {
                     resetSubsystems();
                     launcherState = "rejecting";
                     intakeState = "intaking";
-                    premoveTurret(x(49),84,Math.toDegrees(a(216)));
+                    premoveTurret(x(50),84,Math.toDegrees(a(216)));
                     follower.followPath(RampToScore115);
                     autoState = -5;
                 }
@@ -1042,7 +1238,7 @@ public class Meet3Auto extends LinearOpMode {
                 }
                 break;
             case 11:
-                if (!follower.isBusy()) {
+                if (!follower.isBusy() && follower.getVelocity().getMagnitude() < 1.0) {
                     launchBalls();
                     autoState = 19;
                 }
@@ -1060,13 +1256,13 @@ public class Meet3Auto extends LinearOpMode {
                     resetSubsystems();
                     launcherState = "rejecting";
                     intakeState = "intaking";
-                    premoveTurret(x(49),84,Math.toDegrees(a(180)));
+                    premoveTurret(x(50),84,Math.toDegrees(a(180)));
                     follower.followPath(PPGToScore15);
                     autoState = 21;
                 }
                 break;
             case 21:
-                if (!follower.isBusy()) {
+                if (!follower.isBusy() && follower.getVelocity().getMagnitude() < 1.5) {
                     launchBalls();
                     autoState = 22;
                 }
@@ -1090,13 +1286,13 @@ public class Meet3Auto extends LinearOpMode {
                     resetSubsystems();
                     launcherState = "rejecting";
                     intakeState = "intaking";
-                    premoveTurret(x(56),80,Math.toDegrees(a(230)));
+                    premoveTurret(x(60),80,Math.toDegrees(a(238)));
                     follower.followPath(GPPToScore15one);
                     autoState = 26;
                 }
                 break;
             case 26:
-                if (!follower.isBusy()) {
+                if (!follower.isBusy() && follower.getVelocity().getMagnitude() < 1.5) {
                     launchBalls();
                     autoState = 27;
 
@@ -1126,7 +1322,6 @@ public class Meet3Auto extends LinearOpMode {
                 .setReversed()
                 .addTemporalCallback(500, preSpinLauncher)
                 .setBrakingStrength(0.65)
-                .setVelocityConstraint(3)
                 .build();
 
         scoreToPGP15 = follower
@@ -1135,22 +1330,22 @@ public class Meet3Auto extends LinearOpMode {
                         new BezierLine(new Pose(x(45), 92), new Pose(x(45), 60))
                 )
                 .setLinearHeadingInterpolation(a(135), a(180),0.8)
-                .setBrakingStrength(0.6)
+                //.setBrakingStrength(0.6)
                 .build();
 
         PGPIntake15 = follower
                 .pathBuilder()
                 .addPath(
-                        new BezierLine(new Pose(x(45), 60), new Pose(x(22), 60))
+                        new BezierLine(new Pose(x(45), 60), new Pose(x(19), 60))
                 )
                 .setTangentHeadingInterpolation()
-                .setBrakingStrength(0.6)
+                //.setBrakingStrength(0.6)
                 .build();
 
          PGPToScore15 = follower
                 .pathBuilder()
                 .addPath(
-                        new BezierLine(new Pose(x(22), 60), new Pose(x(48), 84))
+                        new BezierLine(new Pose(x(19), 60), new Pose(x(50), 86))
                 )
                 .setTangentHeadingInterpolation()
                 .setReversed()
@@ -1159,34 +1354,44 @@ public class Meet3Auto extends LinearOpMode {
                 .addTemporalCallback(400, stopIntake)
                 .addTemporalCallback(500, preSpinLauncher)
                 .setBrakingStrength(0.66)
-                .setVelocityConstraint(3)
                 .build();
 
         ScoreToRamp115 = follower
                 .pathBuilder()
                 .addPath(
-                        new BezierLine(new Pose(x(48), 84), new Pose(x(35), 63))
+                        new BezierLine(new Pose(x(50), 86), new Pose(x(35), 63))
                 )
-                .setLinearHeadingInterpolation(a(223), a(140),0.8)
+                .setLinearHeadingInterpolation(a(223), a(135),0.8)
+                .build();
+
+        ScoreToRamp215 = follower
+                .pathBuilder()
+                .addPath(
+                        new BezierLine(
+                                new Pose(x(32), 59.5),
+                                new Pose(x(12.5), 59.5)
+                        )
+                )
+                .setConstantHeadingInterpolation(a(135))
                 .build();
 
         IntakeRamp15 = follower
                 .pathBuilder()
                 .addPath(
                         new BezierLine(
-                                new Pose(x(32), 59.5),
-                                new Pose(x(13), 59.5)
+                                new Pose(x(12.5), 59.5),
+                                new Pose(x(12.5), 52)
                         )
                 )
-                .setConstantHeadingInterpolation(a(140))
+                .setConstantHeadingInterpolation(a(135))
                 .build();
 
         RampToScore115 = follower
                 .pathBuilder()
                 .addPath(
-                        new BezierLine(new Pose(x(13.0),59.5), new Pose(x(16),60))
+                        new BezierLine(new Pose(x(12.5),52), new Pose(x(25),60))
                 )
-                .setConstantHeadingInterpolation(a(140))
+                .setConstantHeadingInterpolation(a(135))
                 .setNoDeceleration()
                 .addTemporalCallback(200,stopIntake)
                 .addTemporalCallback(300, rejectIntake)
@@ -1197,18 +1402,17 @@ public class Meet3Auto extends LinearOpMode {
         RampToScore215 = follower
                 .pathBuilder()
                 .addPath(
-                        new BezierLine(new Pose(x(17), 60), new Pose(x(49), 84))
+                        new BezierLine(new Pose(x(25), 60), new Pose(x(52), 86))
                 )
                 .setTangentHeadingInterpolation()
                 .setReversed()
                 .setBrakingStrength(0.66)
-                .setVelocityConstraint(3)
                 .build();
 
         PPGIntake15 = follower
                 .pathBuilder()
                 .addPath(
-                        new BezierLine(new Pose(x(49), 84), new Pose(x(20), 84))
+                        new BezierLine(new Pose(x(52), 86), new Pose(x(21), 84))
                 )
                 .setTangentHeadingInterpolation()
                 .build();
@@ -1216,7 +1420,7 @@ public class Meet3Auto extends LinearOpMode {
         PPGToScore15 = follower
                 .pathBuilder()
                 .addPath(
-                        new BezierLine(new Pose(x(20), 84), new Pose(x(49), 84))
+                        new BezierLine(new Pose(x(21), 84), new Pose(x(52), 86))
                 )
                 .setTangentHeadingInterpolation()
                 .setReversed()
@@ -1225,13 +1429,12 @@ public class Meet3Auto extends LinearOpMode {
                 .addTemporalCallback(400, stopIntake)
                 .addTemporalCallback(500, preSpinLauncher)
                 .setBrakingStrength(0.68)
-                .setVelocityConstraint(3)
                 .build();
 
         ScoreToGPP15 = follower
                 .pathBuilder()
                 .addPath(
-                        new BezierLine(new Pose(x(49), 84), new Pose(x(48), 65))
+                        new BezierLine(new Pose(x(52), 86), new Pose(x(48), 65))
                 )
                 .setTangentHeadingInterpolation()
                 .setNoDeceleration()
@@ -1245,7 +1448,7 @@ public class Meet3Auto extends LinearOpMode {
         GPPIntake15 = follower
                 .pathBuilder()
                 .addPath(
-                        new BezierLine(new Pose(x(48), 36), new Pose(x(20), 36))
+                        new BezierLine(new Pose(x(48), 36), new Pose(x(16), 36))
                 )
                 .setTangentHeadingInterpolation()
                 .build();
@@ -1253,7 +1456,7 @@ public class Meet3Auto extends LinearOpMode {
         GPPToScore15one = follower
                 .pathBuilder()
                 .addPath(
-                        new BezierLine(new Pose(x(20), 36), new Pose(x(48),84))
+                        new BezierLine(new Pose(x(16), 36), new Pose(x(52),86))
                 )
                 .setTangentHeadingInterpolation()
                 .setReversed()
@@ -1261,14 +1464,13 @@ public class Meet3Auto extends LinearOpMode {
                 .addTemporalCallback(300, rejectIntake)
                 .addTemporalCallback(400, stopIntake)
                 .addTemporalCallback(500, preSpinLauncher)
-                .setVelocityConstraint(3)
                 .build();
 
 
         Park15 = follower
                 .pathBuilder()
                 .addPath(
-                        new BezierLine(new Pose(x(56),80), new Pose(x(48),72))
+                        new BezierLine(new Pose(x(50),84), new Pose(x(48),72))
                 )
                 .setTangentHeadingInterpolation()
                 .build();
@@ -1279,6 +1481,7 @@ public class Meet3Auto extends LinearOpMode {
             case -1:
                 break;
             case 0:
+                transferLoadSpeed = 1.0;
                 follower.followPath(startToScore);
                 autoState = 1;
                 premoveTurret(x(45),92,Math.toDegrees(a(135)));

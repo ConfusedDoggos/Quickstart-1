@@ -50,13 +50,13 @@ public class Meet3Teleop extends LinearOpMode {
 
 
     //Team Dependents
-    private String team = "blue";
+    public static String team = Meet3Auto.team;
     private double goalID = 20;
     private Pose startPose;
     private Pose goalPose;
     private Pose aprilTagPose;
     private Pose poseResetPose;
-
+    private boolean useRealStart = false;
     //Lookup Tables
     private InterpLUT velocityLUT = new InterpLUT(), rangeLUT= new InterpLUT();
 
@@ -69,12 +69,12 @@ public class Meet3Teleop extends LinearOpMode {
     public static double ki = 200;
     public static double kd = 0;
     private double launcherTargetVelocity;
-    public static double launcherTestSpeed = 0.6;
+    public static double launcherTestSpeed = 0.65;
     public double odoRange = 0;
 
     //Intake Variables
-    public static double intakePickupSpeed = .8;
-    public static double transferLoadSpeed = .8;
+    public static double intakePickupSpeed = 1.0;
+    public double transferLoadSpeed = 1.0;
     public static double intakeRejectSpeed = -0.5;
 
     //Turret Variables
@@ -113,15 +113,19 @@ public class Meet3Teleop extends LinearOpMode {
         while (opModeInInit()) {
             telemetry.addLine("Driver: Press left stick for blue team and right stick for red team.");
             telemetry.addData("Team Selected:",team);
+            telemetry.addData("Use Base start position(testing)",useRealStart);
             telemetry.update();
             if (gamepad1.left_stick_button) {
                 team="blue";
             } else if (gamepad1.right_stick_button) {
                 team="red";
             }
+            if (gamepad1.a) {
+                useRealStart = true;
+            }
         }
         updateTeamDependents();
-        if (Meet3Auto.endPosition.getX() != 0) startPose = Meet3Auto.endPosition;
+        if (Meet3Auto.endPosition.getX() != 0 && !useRealStart) startPose = Meet3Auto.endPosition;
         follower.setStartingPose(startPose);
         if (opModeIsActive()) {
             teleTimer.reset();
@@ -138,8 +142,6 @@ public class Meet3Teleop extends LinearOpMode {
         }
 
     }   // end method runOpMode()
-
-
 
     public void telemetryUpdate() {
         telemetryM.addLine("Robot Position");
@@ -165,8 +167,9 @@ public class Meet3Teleop extends LinearOpMode {
         launcher2 = new MotorEx(hardwareMap, "launcherMotor2", Motor.GoBILDA.BARE);
         intake = new MotorEx(hardwareMap,"intakeMotor",Motor.GoBILDA.BARE);
         turret = new MotorEx(hardwareMap,"turretMotor",Motor.GoBILDA.RPM_435);
-        turret.resetEncoder();
+        //turret.resetEncoder();
         turret.setZeroPowerBehavior(Motor.ZeroPowerBehavior.BRAKE);
+        turret.setRunMode(Motor.RunMode.RawPower);
         launcher2.setInverted(true);
         launcher1.setVeloCoefficients(kp,ki,kd);
         launcher2.setVeloCoefficients(kp,ki,kd);
@@ -200,9 +203,12 @@ public class Meet3Teleop extends LinearOpMode {
             drive.setMaxSpeed(1);
         }
 
-        if (gamepad2.left_stick_button && gamepad2.right_stick_button) {
+        if (gamepad2.right_trigger > 0.4 && gamepad2.left_trigger > 0.4) {
             follower.setPose(poseResetPose);
         }
+        if (gamepad2.right_stick_button && gamepad2.left_bumper) turret.resetEncoder();
+
+        if (gamepad1.left_stick_button) turretTargetPos = 0;
 
         //Intake Section
         if (gamepad2.a || gamepad1.a) {
@@ -216,7 +222,7 @@ public class Meet3Teleop extends LinearOpMode {
             if (Objects.equals(launcherState,"rejecting")) {
                 launcherState = "idle";
             }
-        } else if (gamepad2.left_bumper || gamepad1.right_stick_button) {
+        } else if (gamepad1.right_stick_button) {
             intakeState = "firing";
         } else if (gamepad1.x || gamepad2.x) {
             intakeState = "idle";
@@ -238,11 +244,11 @@ public class Meet3Teleop extends LinearOpMode {
         }
 
         //Turret Section
-        if (Math.abs(gamepad2.left_stick_x) > 0.1) {
+        if (Math.abs(gamepad2.left_stick_x) > 0.1 || gamepad2.left_bumper) {
             turretManualControl = true;
-            if (turret.getCurrentPosition() > turretAngleToTicks(135) && gamepad2.left_stick_x < 0) {
+            if (turret.getCurrentPosition() > turretAngleToTicks(-135) && gamepad2.left_stick_x < 0) {
                 turret.set(gamepad2.left_stick_x * .4);
-            } else if (turret.getCurrentPosition() < turretAngleToTicks(-135) && gamepad2.left_stick_x > 0) {
+            } else if (turret.getCurrentPosition() < turretAngleToTicks(135) && gamepad2.left_stick_x > 0) {
                 turret.set(gamepad2.left_stick_x * .4);
             } else {
                 turret.set(0);
@@ -257,10 +263,10 @@ public class Meet3Teleop extends LinearOpMode {
         }*/
         if (gamepad2.dpad_left && driftAdjustToggle) { // in case turret drifts, player 2 clicks left or right for autoaim adjustment!!
             driftAdjustToggle = false;
-            turretDriftOffset += 1;
+            turretDriftOffset -= 1;
         } else if (gamepad2.dpad_right && driftAdjustToggle) {
             driftAdjustToggle = false;
-            turretDriftOffset -= 1;
+            turretDriftOffset += 1;
         } else {
             driftAdjustToggle = true;
         }
@@ -292,7 +298,8 @@ public class Meet3Teleop extends LinearOpMode {
                 intake.stopMotor();
                 break;
             case "firing":
-                intake.set(transferLoadSpeed);
+                if (Math.abs(intake.getVelocity()) < 300) intake.set(1.0);
+                else intake.set(transferLoadSpeed);
                 break;
             case "intaking":
                 intake.set(intakePickupSpeed);
@@ -366,7 +373,7 @@ public class Meet3Teleop extends LinearOpMode {
             case "acc_ready":
                 launcherSpinUp();
                 launcher.set(launcherTargetVelocity);
-                if (Objects.equals(turretState, "aimed") && follower.getVelocity().getMagnitude() < 2 && Math.abs(follower.getAngularVelocity()) < 0.2) {
+                if (Objects.equals(turretState, "aimed") && follower.getVelocity().getMagnitude() < 6 && Math.abs(follower.getAngularVelocity()) < 0.5) {
                     intakeState = "firing";
                     launcherState = "firing";
                     break;
@@ -374,7 +381,7 @@ public class Meet3Teleop extends LinearOpMode {
             case "firing":
                 launcherSpinUp();
                 launcher.set(launcherTargetVelocity);
-                if (Objects.equals(turretState,"aiming") || (follower.getVelocity().getMagnitude() > 2 && Math.abs(follower.getAngularVelocity()) < 0.2)) {
+                if (Objects.equals(turretState,"aiming") || (follower.getVelocity().getMagnitude() > 6 && Math.abs(follower.getAngularVelocity()) < 0.5)) {
                     intakeState = "idle";
                     launcherState = "acc_ready";
                 }
@@ -404,6 +411,11 @@ public class Meet3Teleop extends LinearOpMode {
         rangeLUT.add(85,0.5);
         rangeLUT.add(100,.53);
         rangeLUT.add(110,0.55);
+        rangeLUT.add(115,0.57);
+        rangeLUT.add(123,0.67);
+        rangeLUT.add(130,0.67);
+        rangeLUT.add(140,0.74);
+        rangeLUT.add(160,0.79);
         rangeLUT.createLUT();
 
         velocityLUT.add(-1,2500);
@@ -421,8 +433,10 @@ public class Meet3Teleop extends LinearOpMode {
     }
 
     public double calculateRangeLUT(double input) {
-        if (input < 20 || input > 110) {
-            return 0.45;
+        if (input < 20 || input > 160) {
+            if (input > 110) transferLoadSpeed = 0.6;
+            else transferLoadSpeed = 0.8;
+            return launcherTestSpeed;
         } else {
             return rangeLUT.get(input);
         }
@@ -447,7 +461,8 @@ public class Meet3Teleop extends LinearOpMode {
         double turretAngle;
         turretAngle = calculateTurretAngle(currentPose.getX(), currentPose.getY(), Math.toDegrees((currentPose.getHeading())));
         turretAngle = turretAngleLimiter(turretAngle);
-        if (follower.getVelocity().getMagnitude() < 2 && Math.abs(follower.getAngularVelocity()) < 0.2) turretTargetPos = turretAngleToTicks(turretAngle);
+        //if (follower.getVelocity().getMagnitude() < 2 && Math.abs(follower.getAngularVelocity()) < 0.2)
+        turretTargetPos = turretAngleToTicks(turretAngle);
     }
 
     public double calculateTurretAngle(double botX, double botY, double botHeading) {
@@ -462,21 +477,22 @@ public class Meet3Teleop extends LinearOpMode {
     public void turretControlLoop() {
         double output = turretPIDF.calculate(turret.getCurrentPosition(),turretTargetPos);
         double kSFriction;
-        if (Math.abs(turretPIDF.getPositionError()) <= turretTolerance) kSFriction = 0;
+        if (Math.abs(turretPIDF.getPositionError()) <= turretTolerance) {
+            turret.stopMotor();
+        }
         else {
             kSFriction = tkSCustom * (Math.abs(turretPIDF.getPositionError()) / turretPIDF.getPositionError());
+            output += kSFriction;
+            turret.set(output);
         }
-        output += kSFriction;
-        if (Math.abs(turretPIDF.getPositionError()) <= turretTolerance) turret.stopMotor();
-        turret.set(output);
     }
 
     public int turretAngleToTicks(double angle) {
-        return (int) (angle * 3638.7 / 360); //978.7 with 435
+        return (int) (angle * 978.7 / 360); //978.7 with 435
     }
 
     public int turretTicksToAngle(double ticks) {
-        return (int) (ticks * 360 / 3638.7); //978.7 with 435
+        return (int) (ticks * 360 / 978.7); //978.7 with 435
     }
 
     public double turretAngleLimiter(double angleAttempt) {
@@ -490,10 +506,12 @@ public class Meet3Teleop extends LinearOpMode {
             turretAngleLimited = true;
             return turretTicksToAngle(turretTargetPos);
         } else turretAngleLimited = false;
-        if (realAngle > 150) {
-            realAngle = 150;
-        } else if (realAngle < -150) {
-            realAngle = -150;
+        if (realAngle > 135) {
+            turretAngleLimited = true;
+            realAngle = 135;
+        } else if (realAngle < -135) {
+            realAngle = -135;
+            turretAngleLimited = true;
         }
         return realAngle;
     }
@@ -501,37 +519,26 @@ public class Meet3Teleop extends LinearOpMode {
     public void updateTeamDependents() {
         if (Objects.equals(team,"blue")){
             goalID = 20;
-            startPose = new Pose(18.5,118.5,Math.toRadians(144));
+            new Pose(18.5,118.5,Math.toRadians(143));
             goalPose = new Pose(0,144,Math.toRadians(135));
-            poseResetPose = new Pose(0,0,0); //need to find good one
+            poseResetPose = new Pose(114,7,Math.toRadians(90)); //need to find good one
             aprilTagPose = new Pose(15,130,0);
         } else if (Objects.equals(team,"red")) {
             goalID = 24;
-            startPose = new Pose(125.5,134,Math.toRadians(36));
+            startPose = new Pose(x(18.5),118.5,a(143));
             goalPose = new Pose(144,144,Math.toRadians(45));
-            poseResetPose = new Pose(0,0,0); //need to find good one
+            poseResetPose = new Pose(30,7,Math.toRadians(90)); //need to find good one
             aprilTagPose = new Pose(129,130,0);
         }
     }
 
     public double x(double X) { //transform X based on team
         if (Objects.equals(team, "blue")) return X;
-        else return 144-(-1*X);
+        else return 144-(X);
     }
 
     public double a(double angle) { //transform heading based on team
         if (Objects.equals(team,"blue")) return Math.toRadians(angle);
         else return Math.toRadians(-(angle-90)+90);
-    }
-
-    public void resetSubsystems() {
-        launcherState = "idle";
-        intakeState = "idle";
-        turretState = "idle";
-    }
-
-    public void intakeBalls() {
-        launcherState = "rejecting";
-        intakeState = "intaking";
     }
 }

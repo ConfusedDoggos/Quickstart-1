@@ -111,7 +111,7 @@ public class Meet2Auto extends LinearOpMode {
     public double odoRange = 0;
     public int ballsLaunched = 0;
     public static double launchDelaySeconds = 0.15;
-    public static double shooterSpeedGap = 40;
+    public static double shooterSpeedGap = 20;
     public double previousVelocity = 0;
 
     //Intake Variables
