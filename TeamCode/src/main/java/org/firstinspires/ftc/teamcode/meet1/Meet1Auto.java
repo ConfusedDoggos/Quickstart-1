@@ -20,6 +20,7 @@ import com.seattlesolvers.solverslib.hardware.motors.MotorEx;
 import com.seattlesolvers.solverslib.hardware.motors.MotorGroup;
 import com.seattlesolvers.solverslib.util.InterpLUT;
 
+import org.firstinspires.ftc.teamcode.Meet_ILT.AprilTag;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
 import java.util.List;
@@ -103,6 +104,8 @@ public class Meet1Auto extends LinearOpMode {
         telemetryM = PanelsTelemetry.INSTANCE.getTelemetry(); // Panels telemetry
         initMotors(); //Initializes subsystem motors
         buildTables(); //Initialize lookup tables
+
+        AprilTag.initilizeTracking();
 
         //Initialize PP Follower
         follower= Constants.createFollower(hardwareMap);
