@@ -1,7 +1,12 @@
 package org.firstinspires.ftc.teamcode.Meet_ILT;
 
+import static org.firstinspires.ftc.robotcore.external.BlocksOpModeCompanion.hardwareMap;
+
+import android.util.Size;
+
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 
+import org.firstinspires.ftc.robotcore.external.hardware.camera.WebcamName;
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.Pose3D;
@@ -15,20 +20,20 @@ import org.firstinspires.ftc.vision.apriltag.AprilTagProcessor;
 
 import java.util.List;
 
-public abstract class AprilTag extends LinearOpMode {
-    private static AprilTagProcessor aprilTag;
-    private static VisionPortal visionPortal;
+public class AprilTag {
+    private AprilTagProcessor aprilTag;
+    private VisionPortal visionPortal;
 
-    public static Position cameraPosition = new Position(DistanceUnit.INCH,
+    public Position cameraPosition = new Position(DistanceUnit.INCH,
             0, 0, 0, 0);
-    public static YawPitchRollAngles cameraOrientation = new YawPitchRollAngles(AngleUnit.DEGREES,
+    public YawPitchRollAngles cameraOrientation = new YawPitchRollAngles(AngleUnit.DEGREES,
             0, -90, 0, 0);
 
-    public static Pose3D robotPose;
-    public static YawPitchRollAngles robotOrientation;
+    public Position robotPose = new Position(DistanceUnit.INCH,0,0,0, 0);
+    public YawPitchRollAngles robotOrientation = new YawPitchRollAngles(AngleUnit.DEGREES,0,0,0,0);
 
 
-    public static void initilizeTracking() {
+    public void initilizeTracking() {
         aprilTag = new AprilTagProcessor.Builder()
                 .setDrawAxes(true)
                 .setDrawCubeProjection(true)
@@ -39,14 +44,19 @@ public abstract class AprilTag extends LinearOpMode {
                 .setCameraPose(cameraPosition, cameraOrientation)
 
                 .build();
+        VisionPortal.Builder builder = new VisionPortal.Builder();
+        builder.setCamera(hardwareMap.get(WebcamName.class, "Webcam 1"));
+        builder.setCameraResolution(new Size(640, 480));
+        builder.addProcessor(aprilTag);
+        visionPortal = builder.build();
     }
-    public static void updateTelemetry() {
+    public void updateTelemetry() {
         List<AprilTagDetection> currentDetections = aprilTag.getDetections();
 
         for(AprilTagDetection detection : currentDetections) {
             if(detection.metadata != null) {
                 if(detection.metadata.name.contains("Obelisk")) {
-                    robotPose = detection.robotPose;
+                    robotPose = detection.robotPose.getPosition();
                     robotOrientation = detection.robotPose.getOrientation();
                 }
             }
