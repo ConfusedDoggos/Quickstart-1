@@ -4,7 +4,10 @@ import static org.firstinspires.ftc.robotcore.external.BlocksOpModeCompanion.har
 
 import android.util.Size;
 
+import com.bylazar.camerastream.PanelsCameraStream;
+import com.bylazar.panels.Panels;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
+import com.qualcomm.robotcore.hardware.HardwareMap;
 
 import org.firstinspires.ftc.robotcore.external.hardware.camera.WebcamName;
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
@@ -20,6 +23,8 @@ import org.firstinspires.ftc.vision.apriltag.AprilTagProcessor;
 
 import java.util.List;
 
+import javax.annotation.processing.Processor;
+
 public class AprilTag {
     private AprilTagProcessor aprilTag;
     private VisionPortal visionPortal;
@@ -33,7 +38,7 @@ public class AprilTag {
     public YawPitchRollAngles robotOrientation = new YawPitchRollAngles(AngleUnit.DEGREES,0,0,0,0);
 
 
-    public void initilizeTracking() {
+    public void initilizeTracking(HardwareMap hardwareMapRef) {
         aprilTag = new AprilTagProcessor.Builder()
                 .setDrawAxes(true)
                 .setDrawCubeProjection(true)
@@ -44,22 +49,26 @@ public class AprilTag {
                 .setCameraPose(cameraPosition, cameraOrientation)
 
                 .build();
-        VisionPortal.Builder builder = new VisionPortal.Builder();
-        builder.setCamera(hardwareMap.get(WebcamName.class, "Webcam 1"));
-        builder.setCameraResolution(new Size(640, 480));
-        builder.addProcessor(aprilTag);
+        VisionPortal.Builder builder = new VisionPortal.Builder()
+                .setCamera(hardwareMapRef.get(WebcamName.class, "Webcam 1"))
+                .setCameraResolution(new Size(640, 480))
+                .addProcessor(aprilTag);
         visionPortal = builder.build();
+        PanelsCameraStream.INSTANCE.startStream(visionPortal, 60);
     }
-    public void updateTelemetry() {
+
+    public Position getTelemetry() {
         List<AprilTagDetection> currentDetections = aprilTag.getDetections();
 
         for(AprilTagDetection detection : currentDetections) {
             if(detection.metadata != null) {
                 if(detection.metadata.name.contains("Obelisk")) {
-                    robotPose = detection.robotPose.getPosition();
-                    robotOrientation = detection.robotPose.getOrientation();
+                    return detection.robotPose.getPosition();
                 }
+                else return new Position(DistanceUnit.INCH, 0, 0, 0, 0);
             }
+            else return new Position(DistanceUnit.INCH, 0, 0, 0, 0);
         }
+        return new Position(DistanceUnit.INCH, 0, 0, 0, 0);
     }
 }

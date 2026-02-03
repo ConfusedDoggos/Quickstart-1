@@ -46,18 +46,18 @@ public class ClassTesting extends LinearOpMode {
         AprilTag aprilTag = new AprilTag();
         telemetry.addData("Status", "Initialized");
         telemetry.update();
-        aprilTag.initilizeTracking();
 
         // Wait for the game to start (driver presses START)
         waitForStart();
         runtime.reset();
 
+        aprilTag.initilizeTracking(hardwareMap);
+
         // run until the end of the match (driver presses STOP)
         while (opModeIsActive()) {
 
-            aprilTag.updateTelemetry();
             // Show the elapsed game time and wheel power.
-            telemetry.addData("Robot pos,", "xyz: (%.2f), (%.2f), (%.2f)", aprilTag.robotPose.x, aprilTag.robotPose.y, aprilTag.robotPose.z);
+            telemetry.addData("Robot pos,", "xyz: (%.2f), (%.2f), (%.2f)", aprilTag.getTelemetry().x, aprilTag.getTelemetry().y, aprilTag.getTelemetry().z);
             telemetry.update();
         }
     }
