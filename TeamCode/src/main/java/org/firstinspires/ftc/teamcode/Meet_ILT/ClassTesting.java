@@ -51,7 +51,7 @@ public class ClassTesting extends LinearOpMode {
         waitForStart();
         runtime.reset();
 
-        aprilTag.initilizeTracking(hardwareMap);
+        aprilTag.init(hardwareMap);
 
         // run until the end of the match (driver presses STOP)
         while (opModeIsActive()) {
