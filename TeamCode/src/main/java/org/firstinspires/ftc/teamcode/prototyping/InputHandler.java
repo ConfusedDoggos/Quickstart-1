@@ -1,11 +1,8 @@
-package org.firstinspires.ftc.teamcode.Meet_ILT.Teleop;
+package org.firstinspires.ftc.teamcode.prototyping;
 
 import static org.firstinspires.ftc.teamcode.pedroPathing.Tuning.follower;
 
 import com.qualcomm.robotcore.hardware.Gamepad;
-
-import org.firstinspires.ftc.teamcode.Meet_ILT.Motors;
-import org.firstinspires.ftc.teamcode.Meet_ILT.StateMachine;
 
 import java.util.Objects;
 

@@ -1,12 +1,9 @@
-package org.firstinspires.ftc.teamcode.Meet_ILT;
+package org.firstinspires.ftc.teamcode.prototyping;
 
 import static org.firstinspires.ftc.teamcode.meet2.Meet2Auto.shooterSpeedGap;
 import static org.firstinspires.ftc.teamcode.pedroPathing.Tuning.follower;
 
 import com.qualcomm.robotcore.util.ElapsedTime;
-
-import org.firstinspires.ftc.teamcode.Meet_ILT.Teleop.Configurables;
-import org.firstinspires.ftc.teamcode.Meet_ILT.Teleop.ILT_Teleop;
 
 import java.util.Objects;
 

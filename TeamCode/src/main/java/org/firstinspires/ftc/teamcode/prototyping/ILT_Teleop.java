@@ -1,17 +1,12 @@
-package org.firstinspires.ftc.teamcode.Meet_ILT.Teleop;
-
-import android.renderscript.ScriptGroup;
+package org.firstinspires.ftc.teamcode.prototyping;
 
 import com.pedropathing.geometry.Pose;
-import com.qualcomm.hardware.sparkfun.SparkFunOTOS;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.util.ElapsedTime;
 import com.seattlesolvers.solverslib.util.InterpLUT;
 
 import org.firstinspires.ftc.teamcode.Meet_ILT.AprilTag;
-import org.firstinspires.ftc.teamcode.Meet_ILT.Motors;
-import org.firstinspires.ftc.teamcode.Meet_ILT.StateMachine;
 
 @TeleOp(name="ILT Teleop", group="ILT")
 public class ILT_Teleop extends LinearOpMode {

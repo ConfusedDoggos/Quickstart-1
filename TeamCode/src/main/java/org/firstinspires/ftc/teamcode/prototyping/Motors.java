@@ -1,7 +1,6 @@
-package org.firstinspires.ftc.teamcode.Meet_ILT;
+package org.firstinspires.ftc.teamcode.prototyping;
 
 import com.bylazar.configurables.annotations.Configurable;
-import com.pedropathing.geometry.Pose;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.seattlesolvers.solverslib.controller.PIDFController;
 import com.seattlesolvers.solverslib.drivebase.MecanumDrive;
@@ -9,9 +8,6 @@ import com.seattlesolvers.solverslib.hardware.motors.Motor;
 import com.seattlesolvers.solverslib.hardware.motors.MotorEx;
 import com.seattlesolvers.solverslib.hardware.motors.MotorGroup;
 import com.seattlesolvers.solverslib.util.InterpLUT;
-
-import org.firstinspires.ftc.teamcode.Meet_ILT.Teleop.Configurables;
-import org.firstinspires.ftc.teamcode.Meet_ILT.Teleop.ILT_Teleop;
 
 @Configurable
 public class Motors {
