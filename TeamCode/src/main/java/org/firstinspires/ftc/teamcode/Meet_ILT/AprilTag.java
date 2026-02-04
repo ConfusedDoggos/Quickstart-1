@@ -38,7 +38,7 @@ public class AprilTag {
     public YawPitchRollAngles robotOrientation = new YawPitchRollAngles(AngleUnit.DEGREES,0,0,0,0);
 
 
-    public void initilizeTracking(HardwareMap hardwareMapRef) {
+    public void init(HardwareMap hardwareMapRef) {
         aprilTag = new AprilTagProcessor.Builder()
                 .setDrawAxes(true)
                 .setDrawCubeProjection(true)
