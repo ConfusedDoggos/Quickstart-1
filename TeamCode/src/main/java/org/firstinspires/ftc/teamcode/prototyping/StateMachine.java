@@ -8,9 +8,9 @@ import com.qualcomm.robotcore.util.ElapsedTime;
 import java.util.Objects;
 
 public class StateMachine {
-    public String intakeState;
-    public String turretState;
-    public String launcherState;
+    public String intakeState = "idle";
+    public String turretState = "idle";
+    public String launcherState = "idle";
 
     double intakePickupSpeed = 1.0;
     double intakeRejectSpeed = -0.5;
