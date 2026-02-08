@@ -1,4 +1,4 @@
-package org.firstinspires.ftc.teamcode.prototyping;
+package org.firstinspires.ftc.teamcode.prototyping.Teleop;
 
 import com.bylazar.configurables.annotations.Configurable;
 

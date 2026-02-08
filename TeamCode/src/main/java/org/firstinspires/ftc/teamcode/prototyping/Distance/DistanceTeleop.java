@@ -27,39 +27,67 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package org.firstinspires.ftc.teamcode.Meet_ILT;
+package org.firstinspires.ftc.teamcode.prototyping.Distance;
 
 import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
+import com.qualcomm.robotcore.hardware.ColorSensor;
 import com.qualcomm.robotcore.hardware.DcMotor;
+import com.qualcomm.robotcore.hardware.DistanceSensor;
 import com.qualcomm.robotcore.util.ElapsedTime;
 import com.qualcomm.robotcore.util.Range;
-@TeleOp(name="APRIL TAG LOCALIZATION", group="Localization")
-public class ClassTesting extends LinearOpMode {
+
+import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
+
+@TeleOp(name="Distance Stuff", group="Linear OpMode")
+public class DistanceTeleop extends LinearOpMode {
 
     // Declare OpMode members.
     private ElapsedTime runtime = new ElapsedTime();
 
+    private DistanceSensor distanceSensor_01;
+    private DistanceSensor distanceSensor_02;
+
+    private ColorSensor colorSensor;
+    private double distance_01;
+    private double distance_02;
+
+
+
     @Override
     public void runOpMode() {
-        AprilTag aprilTag = new AprilTag();
-        Drawing drawing = new Drawing();
+        distanceSensor_01 = hardwareMap.get(DistanceSensor.class, "firstDistanceSensor");
+        distanceSensor_02 = hardwareMap.get(DistanceSensor.class, "thirdDistanceSensor");
+        colorSensor = hardwareMap.get(ColorSensor.class, "colorSensor");
         telemetry.addData("Status", "Initialized");
         telemetry.update();
 
         // Wait for the game to start (driver presses START)
         waitForStart();
         runtime.reset();
-
-        aprilTag.init(hardwareMap);
-
         // run until the end of the match (driver presses STOP)
         while (opModeIsActive()) {
+            boolean ballin1;
+            boolean ballin2;
+            boolean ballin3;
+
+            distance_01 = distanceSensor_01.getDistance(DistanceUnit.INCH);
+            distance_02 = distanceSensor_02.getDistance(DistanceUnit.INCH);
+
+            telemetry.addData("Distance", distance_01);
+            telemetry.addData("Color", colorSensor.alpha());
+            ballin1 = distance_01 < 4;
+            ballin2 = colorSensor.alpha() > 50;
+            ballin3 = distance_02 < 4;
+
+            telemetry.addData("Ball in 1?", ballin1);
+            telemetry.addData("Ball in 2?", ballin2);
+            telemetry.addData("Ball in 3?", ballin3);
+
+
 
             // Show the elapsed game time and wheel power.
-            telemetry.addData("Robot pos,", "xyz: (%.2f), (%.2f), (%.2f)", aprilTag.getTelemetry().getPosition().x, aprilTag.getTelemetry().getPosition().y, aprilTag.getTelemetry().getPosition().z);
-            drawing.drawRobot(aprilTag.getTelemetry().getPosition(), aprilTag.getTelemetry().getOrientation());
             telemetry.update();
         }
     }

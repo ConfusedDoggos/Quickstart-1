@@ -1,4 +1,4 @@
-package org.firstinspires.ftc.teamcode.prototyping;
+package org.firstinspires.ftc.teamcode.prototyping.Teleop;
 
 import static org.firstinspires.ftc.teamcode.meet2.Meet2Auto.shooterSpeedGap;
 import static org.firstinspires.ftc.teamcode.pedroPathing.Tuning.follower;

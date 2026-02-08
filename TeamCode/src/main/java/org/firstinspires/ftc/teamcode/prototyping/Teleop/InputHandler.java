@@ -1,6 +1,4 @@
-package org.firstinspires.ftc.teamcode.prototyping;
-
-import static org.firstinspires.ftc.teamcode.pedroPathing.Tuning.follower;
+package org.firstinspires.ftc.teamcode.prototyping.Teleop;
 
 import com.qualcomm.robotcore.hardware.Gamepad;
 
