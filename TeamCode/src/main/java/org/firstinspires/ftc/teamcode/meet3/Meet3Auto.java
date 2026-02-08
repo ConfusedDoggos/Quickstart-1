@@ -338,6 +338,8 @@ public class Meet3Auto extends LinearOpMode {
         double botY = currentPose.getY();
         double goalX = goalPose.getX();
         double goalY = goalPose.getY();
+        if (Objects.equals(launcherState, "firing")) launcher.setRunMode(Motor.RunMode.RawPower);
+        else launcher.setRunMode(Motor.RunMode.VelocityControl);
         switch (launcherState){
             case "idle":
                 launcherisReady = true;
@@ -374,7 +376,10 @@ public class Meet3Auto extends LinearOpMode {
                 }
             case "firing":
                 launcherSpinUp();
-                launcher.set(launcherTargetVelocity);
+                if (launcher.getVelocity() > velocityLUT.get(launcherTargetVelocity)) {
+                    launcher.set(0);
+                } else launcher.set(1);
+                //launcher.set(launcherTargetVelocity);
                 if (Objects.equals(turretState,"aiming")) {
                     intakeState = "idle";
                     launcherState = "aiming";
@@ -400,19 +405,32 @@ public class Meet3Auto extends LinearOpMode {
 
         //Add values (obtained empirically)
         //Input is distance, output is shooter velocity
-        rangeLUT.add(20,0.43);
-        rangeLUT.add(48,0.43);
-        rangeLUT.add(55,0.43);
-        rangeLUT.add(65.7,0.445);
-        rangeLUT.add(75,0.47);
-        rangeLUT.add(85,0.495);
-        rangeLUT.add(100,.53);
-        rangeLUT.add(110,0.55);
-        rangeLUT.add(115,0.57);
-        rangeLUT.add(123,0.67);
-        rangeLUT.add(130,0.67);
-        rangeLUT.add(140,0.74);
-        rangeLUT.add(160,0.79);
+//        rangeLUT.add(20,0.43);
+//        rangeLUT.add(48,0.43);
+//        rangeLUT.add(55,0.43);
+//        rangeLUT.add(65.7,0.445);
+//        rangeLUT.add(75,0.47);
+//        rangeLUT.add(85,0.495);
+//        rangeLUT.add(100,.53);
+//        rangeLUT.add(110,0.55);
+//        rangeLUT.add(115,0.57);
+//        rangeLUT.add(123,0.67);
+//        rangeLUT.add(130,0.67);
+//        rangeLUT.add(140,0.74);
+//        rangeLUT.add(160,0.79);
+        rangeLUT.add(20,0.46);
+        rangeLUT.add(48,0.46);
+        rangeLUT.add(55,0.46);
+        rangeLUT.add(65.7,0.48);
+        rangeLUT.add(75,0.5);
+        rangeLUT.add(85,0.54);
+        rangeLUT.add(100,.57);
+        rangeLUT.add(110,0.6);
+        rangeLUT.add(115,0.62);
+        rangeLUT.add(123,0.69);
+        rangeLUT.add(130,0.69);
+        rangeLUT.add(140,0.76);
+        rangeLUT.add(160,0.81);
         rangeLUT.createLUT();
 
         velocityLUT.add(-1,2500);
@@ -464,7 +482,7 @@ public class Meet3Auto extends LinearOpMode {
         double goalX = goalPose.getX();
         double goalY = goalPose.getY();
         double targetAngle = Math.toDegrees(Math.atan2(goalY-botY,goalX-botX));
-        targetAngle -= botHeading;
+        targetAngle -= botHeading + 180;
         telemetryM.addData("Target Angle",targetAngle);
         return targetAngle;
     }
@@ -495,11 +513,11 @@ public class Meet3Auto extends LinearOpMode {
     }
 
     public int turretAngleToTicks(double angle) {
-        return (int) (angle * 978.7 / 360); //978.7 with 435
+        return (int) (angle * 1076.6 / 360); //978.7 with 435
     }
 
     public int turretTicksToAngle(double ticks) {
-        return (int) (ticks * 360 / 978.7); //978.7 with 435
+        return (int) (ticks * 360 / 1076.6); //978.7 with 435
     }
 
     public double turretAngleLimiter(double angleAttempt) {
@@ -512,10 +530,10 @@ public class Meet3Auto extends LinearOpMode {
         if ((realAngle > 160 && turret.getCurrentPosition() < 0) || (realAngle < -160 && turret.getCurrentPosition() > 0)) {
             return turretTicksToAngle(turretTargetPos);
         }
-        if (realAngle > 140) {
-            realAngle = 140;
-        } else if (realAngle < -140) {
-            realAngle = -140;
+        if (realAngle > 160) {
+            realAngle = 160;
+        } else if (realAngle < -135) {
+            realAngle = -135;
         }
         return realAngle;
     }
@@ -524,14 +542,14 @@ public class Meet3Auto extends LinearOpMode {
         if (Objects.equals(team,"blue")){
             goalID = 20;
             if (selectedAuto == 9) startPose = new Pose (54,7,Math.toRadians(90));
-            else startPose = new Pose(18.5,118.5,Math.toRadians(143));
+            else startPose = new Pose(18.5,118.5,Math.toRadians(143+180));
             goalPose = new Pose(0,144,Math.toRadians(135));
             aprilTagPose = new Pose(15,130,0);
             backLashOffset = 1;
         } else if (Objects.equals(team,"red")) {
             goalID = 24;
             if (selectedAuto == 9) startPose = new Pose(90,7,Math.toRadians(90));
-            else startPose = new Pose(x(18.5),118.5,a(143));
+            else startPose = new Pose(x(18.5),118.5,a(143+180));
             goalPose = new Pose(144,144,Math.toRadians(45));
             aprilTagPose = new Pose(129,130,0);
             backLashOffset = -1;
