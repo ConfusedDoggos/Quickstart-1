@@ -44,6 +44,7 @@ public class ClassTesting extends LinearOpMode {
     @Override
     public void runOpMode() {
         AprilTag aprilTag = new AprilTag();
+        Drawing drawing = new Drawing();
         telemetry.addData("Status", "Initialized");
         telemetry.update();
 
@@ -57,7 +58,8 @@ public class ClassTesting extends LinearOpMode {
         while (opModeIsActive()) {
 
             // Show the elapsed game time and wheel power.
-            telemetry.addData("Robot pos,", "xyz: (%.2f), (%.2f), (%.2f)", aprilTag.getTelemetry().x, aprilTag.getTelemetry().y, aprilTag.getTelemetry().z);
+            telemetry.addData("Robot pos,", "xyz: (%.2f), (%.2f), (%.2f)", aprilTag.getTelemetry().getPosition().x, aprilTag.getTelemetry().getPosition().y, aprilTag.getTelemetry().getPosition().z);
+            drawing.drawRobot(aprilTag.getTelemetry().getPosition(), aprilTag.getTelemetry().getOrientation());
             telemetry.update();
         }
     }

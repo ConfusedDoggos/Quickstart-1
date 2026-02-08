@@ -37,7 +37,7 @@ public class InputHandler {
         }
 
         if (gamepad2.right_trigger > 0.4 && gamepad2.left_trigger > 0.4) {
-            follower.setPose(mainScript.poseResetPose);
+            mainScript.follower.setPose(mainScript.poseResetPose);
         }
         if (gamepad2.right_stick_button && gamepad2.left_bumper) motorHandler.turret.resetEncoder();
 

@@ -1,5 +1,6 @@
 package org.firstinspires.ftc.teamcode.prototyping;
 
+import com.pedropathing.follower.Follower;
 import com.pedropathing.geometry.Pose;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
@@ -7,6 +8,7 @@ import com.qualcomm.robotcore.util.ElapsedTime;
 import com.seattlesolvers.solverslib.util.InterpLUT;
 
 import org.firstinspires.ftc.teamcode.Meet_ILT.AprilTag;
+import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
 @TeleOp(name="ILT Teleop", group="ILT")
 public class ILT_Teleop extends LinearOpMode {
@@ -29,6 +31,8 @@ public class ILT_Teleop extends LinearOpMode {
     public InterpLUT rangeLUT = new InterpLUT();
     public InterpLUT velocityLUT = new InterpLUT();
 
+    public Follower follower = Constants.createFollower(hardwareMap);
+
 
     @Override
     public void runOpMode() {
@@ -40,10 +44,10 @@ public class ILT_Teleop extends LinearOpMode {
         telemetry.addData("Status", "Initialized");
         telemetry.update();
 
-
         motors.init(hardwareMap, this);
         stateMachine.init(this,motors);
         input.init(this,motors,stateMachine);
+
 
         // Wait for the game to start (driver presses START)
         waitForStart();
@@ -51,6 +55,8 @@ public class ILT_Teleop extends LinearOpMode {
 
         // run until the end of the match (driver presses STOP)
         while (opModeIsActive()) {
+            follower.update();
+            currentPose = follower.getPose();
             input.HandleInput(gamepad1, gamepad2);
             stateMachine.updateStates();
             telemetry.update();

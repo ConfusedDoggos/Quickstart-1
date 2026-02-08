@@ -57,18 +57,18 @@ public class AprilTag {
         PanelsCameraStream.INSTANCE.startStream(visionPortal, 60);
     }
 
-    public Position getTelemetry() {
+    public Pose3D getTelemetry() {
         List<AprilTagDetection> currentDetections = aprilTag.getDetections();
 
         for(AprilTagDetection detection : currentDetections) {
             if(detection.metadata != null) {
-                if(detection.metadata.name.contains("Obelisk")) {
-                    return detection.robotPose.getPosition();
+                if(detection.metadata.id == 20) {
+                    return detection.robotPose;
                 }
-                else return new Position(DistanceUnit.INCH, 0, 0, 0, 0);
+                else return new Pose3D(new Position(DistanceUnit.INCH, 0, 0, 0,0),new YawPitchRollAngles(AngleUnit.DEGREES,0,0,0,0));
             }
-            else return new Position(DistanceUnit.INCH, 0, 0, 0, 0);
+            else return new Pose3D(new Position(DistanceUnit.INCH, 0, 0, 0,0),new YawPitchRollAngles(AngleUnit.DEGREES,0,0,0,0));
         }
-        return new Position(DistanceUnit.INCH, 0, 0, 0, 0);
+        return new Pose3D(new Position(DistanceUnit.INCH, 0, 0, 0,0),new YawPitchRollAngles(AngleUnit.DEGREES,0,0,0,0));
     }
 }
