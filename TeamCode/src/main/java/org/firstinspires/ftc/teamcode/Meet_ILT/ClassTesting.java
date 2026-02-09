@@ -29,6 +29,9 @@
 
 package org.firstinspires.ftc.teamcode.Meet_ILT;
 
+import com.bylazar.configurables.annotations.IgnoreConfigurable;
+import com.bylazar.telemetry.PanelsTelemetry;
+import com.bylazar.telemetry.TelemetryManager;
 import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
@@ -41,12 +44,16 @@ public class ClassTesting extends LinearOpMode {
     // Declare OpMode members.
     private ElapsedTime runtime = new ElapsedTime();
 
+    @IgnoreConfigurable
+    static TelemetryManager telemetryM;
+
     @Override
     public void runOpMode() {
+        telemetryM = PanelsTelemetry.INSTANCE.getTelemetry();
         AprilTag aprilTag = new AprilTag();
         Drawing drawing = new Drawing();
-        telemetry.addData("Status", "Initialized");
-        telemetry.update();
+        telemetryM.addData("Status", "Initialized");
+        telemetryM.update();
 
         // Wait for the game to start (driver presses START)
         waitForStart();
@@ -58,9 +65,12 @@ public class ClassTesting extends LinearOpMode {
         while (opModeIsActive()) {
 
             // Show the elapsed game time and wheel power.
-            telemetry.addData("Robot pos,", "xyz: (%.2f), (%.2f), (%.2f)", aprilTag.getTelemetry().getPosition().x, aprilTag.getTelemetry().getPosition().y, aprilTag.getTelemetry().getPosition().z);
+            telemetryM.addData("Robot X", aprilTag.getTelemetry().getPosition().x);
+            telemetryM.addData("Robot Y", aprilTag.getTelemetry().getPosition().y);
+            telemetryM.addData("Robot Z", aprilTag.getTelemetry().getPosition().z);
+            telemetryM.addData("Robot Heading", aprilTag.getTelemetry().getOrientation().getYaw());
             drawing.drawRobot(aprilTag.getTelemetry().getPosition(), aprilTag.getTelemetry().getOrientation());
-            telemetry.update();
+            telemetryM.update();
         }
     }
 }

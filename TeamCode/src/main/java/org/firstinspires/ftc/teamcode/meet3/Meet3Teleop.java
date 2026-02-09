@@ -16,16 +16,19 @@ import com.qualcomm.robotcore.hardware.ColorSensor;
 import com.qualcomm.robotcore.hardware.DistanceSensor;
 import com.qualcomm.robotcore.hardware.NormalizedColorSensor;
 import com.qualcomm.robotcore.hardware.NormalizedRGBA;
+import com.qualcomm.robotcore.hardware.PwmControl;
 import com.qualcomm.robotcore.util.ElapsedTime;
 import com.seattlesolvers.solverslib.controller.PIDFController;
 import com.seattlesolvers.solverslib.controller.wpilibcontroller.SimpleMotorFeedforward;
 import com.seattlesolvers.solverslib.drivebase.MecanumDrive;
+import com.seattlesolvers.solverslib.hardware.ServoEx;
 import com.seattlesolvers.solverslib.hardware.motors.Motor;
 import com.seattlesolvers.solverslib.hardware.motors.MotorEx;
 import com.seattlesolvers.solverslib.hardware.motors.MotorGroup;
 import com.seattlesolvers.solverslib.util.InterpLUT;
 
 import org.firstinspires.ftc.robotcore.external.JavaUtil;
+import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
 import org.firstinspires.ftc.teamcode.meet3.Meet3Auto;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
@@ -49,11 +52,10 @@ public class Meet3Teleop extends LinearOpMode {
     private final ElapsedTime launchTimer = new ElapsedTime(ElapsedTime.Resolution.SECONDS);
 
     private MotorEx fL, fR, bL, bR, launcher1, launcher2, turret, intake;
-   // private NormalizedColorSensor testSensor;
-    //private double hue;
-    //private String color = "none";
-    //private DistanceSensor testDistanceSensor;
-    private String DTState="drive", intakeState="idle", turretState="idle", launcherState="idle";
+    private ServoEx hoodServo, blockerServo;
+    private DistanceSensor distanceSensor1, distanceSensor2;
+    private ColorSensor colorSensor;
+    private String DTState="drive", intakeState="idle", turretState="idle", launcherState="idle", hoodState="idle";
     private boolean DTisReady, intakeisReady, turretisReady, launcherisReady;
     private MotorGroup launcher;
     private ElapsedTime teleTimer;
@@ -83,6 +85,11 @@ public class Meet3Teleop extends LinearOpMode {
     public static double launcherTestSpeed = 0.65;
     public double odoRange = 0;
 
+    //Hood Variables
+    public double hoodTargetAngle = 40;
+    public static double minHoodAngle = 33;
+    public static double maxHoodAngle = 55;
+
     //Intake Variables
     public static double intakePickupSpeed = 1.0;
     public double transferLoadSpeed = 1.0;
@@ -102,6 +109,12 @@ public class Meet3Teleop extends LinearOpMode {
     private boolean turretAngleLimited = false;
     private double turretDriftOffset = 0;
     private boolean driftAdjustToggle = false;
+
+    //Sensor Variables
+    boolean ballIn1;
+    boolean ballIn2;
+    boolean ballIn3;
+
 
     //The variable to store our instance of the vision portal.
 
@@ -182,6 +195,8 @@ public class Meet3Teleop extends LinearOpMode {
         bR = new MotorEx(hardwareMap, "bR", Motor.GoBILDA.RPM_312);
         launcher1 = new MotorEx(hardwareMap, "launcherMotor1", Motor.GoBILDA.BARE);
         launcher2 = new MotorEx(hardwareMap, "launcherMotor2", Motor.GoBILDA.BARE);
+        launcher1.setZeroPowerBehavior(Motor.ZeroPowerBehavior.BRAKE);
+        launcher2.setZeroPowerBehavior(Motor.ZeroPowerBehavior.BRAKE);
         intake = new MotorEx(hardwareMap,"intakeMotor",Motor.GoBILDA.BARE);
         turret = new MotorEx(hardwareMap,"turretMotor",Motor.GoBILDA.RPM_435);
         //turret.resetEncoder();
@@ -197,19 +212,63 @@ public class Meet3Teleop extends LinearOpMode {
         turretPIDF = new PIDFController(tkP, tkI, tkD, 0);
         turretPIDF.setIntegrationBounds(-errorTotal,errorTotal);
         launcher = new MotorGroup(launcher1, launcher2);
-        //testSensor = hardwareMap.get(NormalizedColorSensor.class,"testSensor");
-        //testDistanceSensor = hardwareMap.get(DistanceSensor.class,"distSensor");
+        distanceSensor1 = hardwareMap.get(DistanceSensor.class, "firstDistanceSensor");
+        distanceSensor2 = hardwareMap.get(DistanceSensor.class, "thirdDistanceSensor");
+        colorSensor = hardwareMap.get(ColorSensor.class, "colorSensor");
+        hoodServo = new ServoEx(hardwareMap,"hoodServo",0, 300);
+        hoodServo.setPwm(new PwmControl.PwmRange(500,2500));
+        hoodServo.setInverted(true);
     }
 
     public void teleOp() {
         DriverInput();
+        sensorTeleOp();
         DTTeleOp();
         turretTeleOp();
         launcherTeleOp();
         intakeTeleOp();
+        hoodTeleOp();
+    }
+
+    public void hoodTeleOp() {
+        switch (hoodState) {
+            case "idle":
+                hoodServo.disable();
+                break;
+            case "up":
+                hoodTargetAngle = maxHoodAngle;
+                hoodServo.set(hoodToServoAngle(hoodTargetAngle));
+                break;
+            case "down":
+                hoodTargetAngle = minHoodAngle;
+                hoodServo.set(hoodToServoAngle(hoodTargetAngle));
+                break;
+        }
+        telemetryM.addData("Hood Angle",hoodTargetAngle);
+        telemetryM.addData("Servo Angle",hoodServo.get());
+    }
+
+    public double servoToHoodAngle(double servoInput) {
+        return (servoInput) * 13 / 121 + minHoodAngle;
+    }
+
+    public double hoodToServoAngle(double hoodAngle) {
+        return (hoodAngle-minHoodAngle) * 121 / 13;
     }
 
     public void DriverInput() {
+
+        if (gamepad1.dpad_up) {
+            hoodState = "up";
+        } else if (gamepad1.dpad_down) {
+            hoodState = "down";
+        } else if (gamepad1.dpad_left) {
+            hoodState = "idle";
+        }
+
+
+
+
         //DT Section
         strafeInput = gamepad1.left_stick_x;
         driveInput = -gamepad1.left_stick_y;
@@ -293,6 +352,24 @@ public class Meet3Teleop extends LinearOpMode {
         driveAngleDegrees = Math.toDegrees(currentPose.getHeading());
     }
 
+    public void sensorTeleOp() {
+        double distance1 = distanceSensor1.getDistance(DistanceUnit.INCH);
+        double distance2 = distanceSensor2.getDistance(DistanceUnit.INCH);
+        double colorAlpha = colorSensor.alpha();
+
+        ballIn1 = distance1 < 4;
+        ballIn2 = colorAlpha > 50;
+        ballIn3 = distance2 < 4;
+
+        telemetryM.addData("Distance1", distance1);
+        telemetryM.addData("Distance2", distance2);
+        telemetryM.addData("Alpha", colorAlpha);
+        telemetryM.addData("Ball in 1?", ballIn1);
+        telemetryM.addData("Ball in 2?", ballIn2);
+        telemetryM.addData("Ball in 3?", ballIn3);
+    }
+
+
     public void DTTeleOp() {
 
         switch (DTState){
@@ -323,6 +400,12 @@ public class Meet3Teleop extends LinearOpMode {
                 break;
             case "intaking":
                 intake.set(intakePickupSpeed);
+                if (ballIn1 && ballIn2 && ballIn3) {
+                    intakeState = "idle";
+                    if (Objects.equals(launcherState,"rejecting")) {
+                        launcherState = "idle";
+                    }
+                }
                 break;
             case "rejecting":
                 intake.set(intakeRejectSpeed);
@@ -364,8 +447,6 @@ public class Meet3Teleop extends LinearOpMode {
         double botY = currentPose.getY();
         double goalX = goalPose.getX();
         double goalY = goalPose.getY();
-        //if (Objects.equals(launcherState, "firing")) launcher.setRunMode(Motor.RunMode.RawPower);
-        //else launcher.setRunMode(Motor.RunMode.VelocityControl);
         switch (launcherState){
             case "idle":
                 launcherisReady = true;
@@ -441,9 +522,9 @@ public class Meet3Teleop extends LinearOpMode {
 //        rangeLUT.add(130,0.67);
 //        rangeLUT.add(140,0.74);
 //        rangeLUT.add(160,0.79);
-        rangeLUT.add(20,0.46);
-        rangeLUT.add(48,0.46);
-        rangeLUT.add(55,0.46);
+        rangeLUT.add(20,0.43);
+        rangeLUT.add(48,0.44);
+        rangeLUT.add(55,0.45);
         rangeLUT.add(65.7,0.48);
         rangeLUT.add(75,0.5);
         rangeLUT.add(85,0.54);
@@ -473,7 +554,7 @@ public class Meet3Teleop extends LinearOpMode {
     public double calculateRangeLUT(double input) {
         if (input < 20 || input > 160) {
             if (input > 110) transferLoadSpeed = 0.6;
-            else transferLoadSpeed = 0.8;
+            else transferLoadSpeed = 1;
             return launcherTestSpeed;
         } else {
             return rangeLUT.get(input);

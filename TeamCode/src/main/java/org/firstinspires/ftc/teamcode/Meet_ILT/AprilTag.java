@@ -47,8 +47,9 @@ public class AprilTag {
                 .setTagLibrary(AprilTagGameDatabase.getDecodeTagLibrary())
                 .setOutputUnits(DistanceUnit.INCH, AngleUnit.DEGREES)
                 .setCameraPose(cameraPosition, cameraOrientation)
-
+                .setLensIntrinsics(822.317,822.137,319.495,242.502)
                 .build();
+
         VisionPortal.Builder builder = new VisionPortal.Builder()
                 .setCamera(hardwareMapRef.get(WebcamName.class, "Webcam 1"))
                 .setCameraResolution(new Size(640, 480))
@@ -62,7 +63,7 @@ public class AprilTag {
 
         for(AprilTagDetection detection : currentDetections) {
             if(detection.metadata != null) {
-                if(detection.metadata.id == 20) {
+                if(detection.metadata.id == 20 || detection.metadata.id == 24) {
                     return detection.robotPose;
                 }
                 else return new Pose3D(new Position(DistanceUnit.INCH, 0, 0, 0,0),new YawPitchRollAngles(AngleUnit.DEGREES,0,0,0,0));

@@ -25,10 +25,15 @@ public class Drawing {
         panelsField.moveCursor(pose.x, pose.y);
         panelsField.circle(10);
 
-        Vector v = new Vector(1, rollAngles.getYaw(AngleUnit.RADIANS));
+        /*Vector v = new Vector(1, rollAngles.getYaw(AngleUnit.RADIANS));
         v.setMagnitude(v.getMagnitude() * 10);
         double x1 = pose.x + v.getXComponent() / 2, y1 = pose.y + v.getYComponent() / 2;
-        double x2 = pose.x + v.getXComponent(), y2 = pose.y + v.getYComponent();
+        double x2 = pose.x + v.getXComponent(), y2 = pose.y + v.getYComponent();*/
+
+        double x1 = pose.x;
+        double y1 = pose.y;
+        double x2 = pose.x + 10 * Math.cos(rollAngles.getYaw(AngleUnit.RADIANS) - Math.PI / 2);
+        double y2 = pose.y + 10 * Math.sin(rollAngles.getYaw(AngleUnit.RADIANS) - Math.PI / 2);
 
         panelsField.setStyle(robotLook);
         panelsField.moveCursor(x1, y1);
