@@ -333,9 +333,9 @@ public class ILT_Auto extends LinearOpMode {
             rangeLUT.add(85,.47);
             rangeLUT.add(95,0.5);
             rangeLUT.add(106,0.52);
-            rangeLUT.add(126,.56);
-            rangeLUT.add(147,.6);
-            rangeLUT.add(160,0.64);
+            rangeLUT.add(126,.58);
+            rangeLUT.add(147,.62);
+            rangeLUT.add(160,0.66);
         } else {
             rangeLUT.add(20,speedOverride);
             rangeLUT.add(160,speedOverride);
@@ -365,9 +365,9 @@ public class ILT_Auto extends LinearOpMode {
             hoodLUT.add(85,39);
             hoodLUT.add(95,40);
             hoodLUT.add(106,42);
-            hoodLUT.add(126, 45);
-            hoodLUT.add(147, 48);
-            hoodLUT.add(160,50);
+            hoodLUT.add(126, 44);
+            hoodLUT.add(147, 47);
+            hoodLUT.add(160,49);
         } else {
             hoodLUT.add(0,angleOverride);
             hoodLUT.add(160,angleOverride);
@@ -681,7 +681,7 @@ public class ILT_Auto extends LinearOpMode {
         if (input < 20 || input > 160) {
             return launcherTestSpeed;
         } else {
-            if (90 < input && input < 130) transferLoadSpeed = 0.8;
+            if (90 < input && input < 110) transferLoadSpeed = 0.8;
             else if (input > 130) transferLoadSpeed = 0.6;
             else transferLoadSpeed = 1;
             return rangeLUT.get(input);
@@ -765,13 +765,13 @@ public class ILT_Auto extends LinearOpMode {
     public void updateTeamDependents() {
         if (Objects.equals(team,"blue")){
             goalID = 20;
-            startPose = new Pose(x(30),136,a(90));
+            startPose = new Pose(x(30),136,a(270));
             goalPose = new Pose(0,144,Math.toRadians(135));
             poseResetPose = new Pose(114,7,Math.toRadians(90)); //need to find good one
             aprilTagPose = new Pose(15,130,0);
         } else if (Objects.equals(team,"red")) {
             goalID = 24;
-            startPose = new Pose(x(30),136,a(90));
+            startPose = new Pose(x(30),136,a(270));
             goalPose = new Pose(144,144,Math.toRadians(45));
             poseResetPose = new Pose(30,7,Math.toRadians(90)); //need to find good one
             aprilTagPose = new Pose(129,130,0);

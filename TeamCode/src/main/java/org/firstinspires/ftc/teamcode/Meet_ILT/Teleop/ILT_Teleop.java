@@ -16,6 +16,7 @@ import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.ColorSensor;
 import com.qualcomm.robotcore.hardware.DistanceSensor;
 import com.qualcomm.robotcore.hardware.PwmControl;
+import com.qualcomm.robotcore.hardware.VoltageSensor;
 import com.qualcomm.robotcore.util.ElapsedTime;
 import com.seattlesolvers.solverslib.controller.PIDController;
 import com.seattlesolvers.solverslib.controller.PIDFController;
@@ -26,7 +27,10 @@ import com.seattlesolvers.solverslib.hardware.motors.MotorEx;
 import com.seattlesolvers.solverslib.hardware.motors.MotorGroup;
 import com.seattlesolvers.solverslib.util.InterpLUT;
 
+import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
+import org.firstinspires.ftc.robotcore.external.navigation.Position;
+import org.firstinspires.ftc.robotcore.external.navigation.YawPitchRollAngles;
 import org.firstinspires.ftc.teamcode.Meet_ILT.Drawing;
 import org.firstinspires.ftc.teamcode.meet3.Meet3Auto;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
@@ -52,7 +56,7 @@ public class ILT_Teleop extends LinearOpMode {
     private final ElapsedTime launchTimer = new ElapsedTime(ElapsedTime.Resolution.SECONDS);
 
     private MotorEx fL, fR, bL, bR, launcher1, launcher2, turret, intake;
-    private ServoEx hoodServo, blockerServo;
+    private ServoEx hoodServo;
     private DistanceSensor distanceSensor1, distanceSensor2;
     private ColorSensor colorSensor;
     private String DTState="drive", intakeState="idle", turretState="idle", launcherState="idle", hoodState="idle";
@@ -122,9 +126,17 @@ public class ILT_Teleop extends LinearOpMode {
     private double turretDriftOffset = 0;
     private boolean driftAdjustToggle = false;
 
+    private double distance1;
+    private double distance2;
+    private double colorAlpha;
+
+    private int cyclesSinceUpdate;
+
     //Sensor Variables
     boolean ballIn1, ballIn2, ballIn3, prevBallIn1, prevBallIn2, prevBallIn3, prev2BallIn1, prev2BallIn2, prev2BallIn3;
 
+    private double voltage;
+    private double voltageMultiplier;
 
     //The variable to store our instance of the vision portal.
 
@@ -140,6 +152,22 @@ public class ILT_Teleop extends LinearOpMode {
 
         //set the default settings for motors and initializes them (wow)
         initMotors();
+
+        drawing.initilize();
+
+        VoltageSensor voltageSensor;
+        voltageSensor = hardwareMap.get(VoltageSensor.class, "Control Hub");
+        voltage = voltageSensor.getVoltage();
+
+        //voltageMultiplier = ((voltage-12)/1.5);
+        voltageMultiplier = 1-((13.0-voltage)/13.0)*2;
+        if (voltageMultiplier > 1) {
+            voltageMultiplier = 1;
+        }
+        if (voltageMultiplier < .8) {
+            voltageMultiplier = .8;
+        }
+
         //initTrackingSoftware();
         createLUTs();
 
@@ -178,6 +206,7 @@ public class ILT_Teleop extends LinearOpMode {
             } catch (NullPointerException ignored) {
             }
         }
+        if (useRealStart) turret.resetEncoder();
         follower.setStartingPose(startPose);
         if (opModeIsActive()) {
             teleTimer.reset();
@@ -215,8 +244,8 @@ public class ILT_Teleop extends LinearOpMode {
         telemetryM.addData("Turret Pos",turret.getCurrentPosition());
         telemetryM.addData("Turret Angle",turret.getCurrentPosition() * 360/1076.6);
         telemetryM.addData("Turret Motor Power",turret.get());
-        //telemetryM.addData("Distance",testDistanceSensor.getDistance(DistanceUnit.INCH));
-        //drawing.drawRobot(new Pose(currentPose.getX(),currentPose.getY()), currentPose.getHeading());
+        //telemetryM.addData("Distance",testDistanceSensor.getDistance(DistanceUnit.INCH))
+        drawing.drawRobot(new Position(DistanceUnit.INCH, currentPose.getX(),currentPose.getY(), 0,0), new YawPitchRollAngles(AngleUnit.RADIANS,turret.getCurrentPosition(), 0,0,0));
     }
 
     public void initMotors() {
@@ -250,9 +279,6 @@ public class ILT_Teleop extends LinearOpMode {
         hoodServo = new ServoEx(hardwareMap,"hoodServo",0, 300);
         hoodServo.setPwm(new PwmControl.PwmRange(500,2500));
         hoodServo.setInverted(true);
-        blockerServo = new ServoEx(hardwareMap,"blockerServo ",0, 180);
-        blockerServo.setPwm(new PwmControl.PwmRange(500,2500));
-        blockerServo.setInverted(true);
     }
 
     public void createLUTs() {
@@ -399,7 +425,7 @@ public class ILT_Teleop extends LinearOpMode {
         //Intake Section
         if (gamepad2.a || gamepad1.a) {
             intakeState = "intaking";
-            //launcherState = "rejecting";
+            launcherState = "rejecting";
         } else if (gamepad2.y || gamepad1.dpad_down) {
             intakeState = "rejecting";
             launcherState = "rejecting";
@@ -417,8 +443,8 @@ public class ILT_Teleop extends LinearOpMode {
             //hoodState = "idle";
         }
         if (gamepad1.y) {
-            intakeState = "readyToFire";
-            launcherState = "preparing";
+//            intakeState = "idle";
+//            launcherState = "preparing";
             turretState = "tracking";
         }
 
@@ -431,7 +457,7 @@ public class ILT_Teleop extends LinearOpMode {
         if (gamepad1.right_bumper || gamepad2.right_bumper) {
             launcherState = "beginLaunchSequence";
             turretState = "aiming";
-            intakeState = "readyToFire";
+            intakeState = "idle";
             launchTimer.reset();
         }
 
@@ -466,10 +492,18 @@ public class ILT_Teleop extends LinearOpMode {
         driveAngleDegrees = Math.toDegrees(currentPose.getHeading());
     }
 
-    public void sensorTeleOp() {
-        double distance1 = distanceSensor1.getDistance(DistanceUnit.INCH);
-        double distance2 = distanceSensor2.getDistance(DistanceUnit.INCH);
-        double colorAlpha = colorSensor.alpha();
+    public void sensorTeleOp() {;
+        if(cyclesSinceUpdate == 2) {
+            distance1 = distanceSensor1.getDistance(DistanceUnit.INCH);
+        }
+        else if(cyclesSinceUpdate == 4) {
+            colorAlpha = colorSensor.alpha();
+        }
+        else if(cyclesSinceUpdate == 6) {
+            distance2 = distanceSensor2.getDistance(DistanceUnit.INCH);
+            cyclesSinceUpdate = 0;
+        }
+        cyclesSinceUpdate++;
 
         prev2BallIn1 = prevBallIn1;
         prev2BallIn2 = prevBallIn2;
@@ -478,7 +512,7 @@ public class ILT_Teleop extends LinearOpMode {
         prevBallIn2 = ballIn2;
         prevBallIn3 = ballIn3;
         ballIn1 = distance1 < 4;
-        ballIn2 = colorAlpha > 50;
+        ballIn2 = colorAlpha > 70;
         ballIn3 = distance2 < 4;
 
         telemetryM.addData("Distance1", distance1);
@@ -511,24 +545,17 @@ public class ILT_Teleop extends LinearOpMode {
             case "idle":
                 intakeisReady = true;
                 intake.stopMotor();
-                blockerServo.set(closedAngle);
-                break;
-            case "readyToFire":
-                intake.stopMotor();
-                blockerServo.set(openAngle);
                 break;
             case "firing":
 //                if (Math.abs(intake.getVelocity()) < 300) intake.set(1.0);
 //                else intake.set(transferLoadSpeed);
                 intake.set(transferLoadSpeed);
-                blockerServo.set(openAngle);
                 break;
             case "intaking":
                 intake.set(intakePickupSpeed);
-                blockerServo.set(closedAngle);
                 if (ballIn1 && ballIn2 && ballIn3 && prevBallIn1 && prevBallIn2 && prevBallIn3 && prev2BallIn1 && prev2BallIn2 && prev2BallIn3) {
-                    intakeState = "readyToFire";
-                    launcherState = "preparing";
+                    intakeState = "idle";
+                    //launcherState = "preparing";
                     turretState = "tracking";
                 }
                 break;
@@ -588,7 +615,7 @@ public class ILT_Teleop extends LinearOpMode {
                 launchTimer.reset();
                 launcher.set(launcherTargetVelocity);
                 launcherisReady = false;
-                intakeState = "readyToFire";
+                intakeState = "idle";
                 launcherState = "aiming";
                 turretState = "aiming";
                 hoodState = "adjusting";
@@ -659,8 +686,9 @@ public class ILT_Teleop extends LinearOpMode {
             transferLoadSpeed = 0;
             return rangeLUT.get(159);
         } else {
-            if (90 < input && input < 130) transferLoadSpeed = 0.8;
-            else if (input > 130) transferLoadSpeed = 0.6;
+            if (70 < input && input < 90) transferLoadSpeed = 0.8 * voltageMultiplier;
+            if (90 < input && input < 110) transferLoadSpeed = 0.6 * voltageMultiplier;
+            else if (input > 110) transferLoadSpeed = 0.55 * voltageMultiplier;
             else transferLoadSpeed = 1;
             return rangeLUT.get(input);
         }
@@ -743,13 +771,13 @@ public class ILT_Teleop extends LinearOpMode {
     public void updateTeamDependents() {
         if (Objects.equals(team,"blue")){
             goalID = 20;
-            startPose = new Pose(17.5,119.5,Math.toRadians(143+180));
+            startPose = new Pose(30,136,Math.toRadians(270));
             goalPose = new Pose(0,144,Math.toRadians(135));
             poseResetPose = new Pose(114,7,Math.toRadians(90)); //need to find good one
             aprilTagPose = new Pose(15,130,0);
         } else if (Objects.equals(team,"red")) {
             goalID = 24;
-            startPose = new Pose(x(17.5),119.5,a(143+180));
+            startPose = new Pose(x(30),136,a(270));
             goalPose = new Pose(144,144,Math.toRadians(45));
             poseResetPose = new Pose(30,7,Math.toRadians(90)); //need to find good one
             aprilTagPose = new Pose(129,130,0);
