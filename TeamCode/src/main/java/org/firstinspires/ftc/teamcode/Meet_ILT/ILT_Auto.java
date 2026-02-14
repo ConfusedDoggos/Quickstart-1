@@ -18,6 +18,7 @@ import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.hardware.ColorSensor;
 import com.qualcomm.robotcore.hardware.DistanceSensor;
 import com.qualcomm.robotcore.hardware.PwmControl;
+import com.qualcomm.robotcore.hardware.VoltageSensor;
 import com.qualcomm.robotcore.util.ElapsedTime;
 import com.seattlesolvers.solverslib.controller.PIDController;
 import com.seattlesolvers.solverslib.controller.PIDFController;
@@ -52,13 +53,15 @@ public class ILT_Auto extends LinearOpMode {
     @IgnoreConfigurable
     static TelemetryManager telemetryM;
 
+    //April Tag Variables
+
     //Pedropathing Variables
     private Pose currentPose;
 
     private final ElapsedTime launchTimer = new ElapsedTime(ElapsedTime.Resolution.SECONDS);
 
     private MotorEx fL, fR, bL, bR, launcher1, launcher2, turret, intake;
-    private ServoEx hoodServo, blockerServo;
+    private ServoEx hoodServo;
     private DistanceSensor distanceSensor1, distanceSensor2;
     private ColorSensor colorSensor;
     private String DTState="drive", intakeState="idle", turretState="idle", launcherState="idle", hoodState="idle";
@@ -75,6 +78,7 @@ public class ILT_Auto extends LinearOpMode {
     private Pose aprilTagPose;
     private Pose poseResetPose;
     private boolean useRealStart = false;
+    public static Pose endPose;
     //Lookup Tables
     private InterpLUT velocityLUT = new InterpLUT(), rangeLUT= new InterpLUT(), hoodLUT = new InterpLUT();
 
@@ -126,9 +130,17 @@ public class ILT_Auto extends LinearOpMode {
     private double turretDriftOffset = 0;
     private boolean driftAdjustToggle = false;
 
+    private double distance1;
+    private double distance2;
+    private double colorAlpha;
+
+    private int cyclesSinceUpdate;
+
     //Sensor Variables
     boolean ballIn1, ballIn2, ballIn3, prevBallIn1, prevBallIn2, prevBallIn3, prev2BallIn1, prev2BallIn2, prev2BallIn3;
 
+    private double voltage;
+    private double voltageMultiplier;
     //Timer
     private final ElapsedTime autoTimer = new ElapsedTime(ElapsedTime.Resolution.SECONDS);
     private final ElapsedTime waitTimer = new ElapsedTime(ElapsedTime.Resolution.SECONDS);
@@ -216,6 +228,21 @@ public class ILT_Auto extends LinearOpMode {
         LoopTimer timer = new LoopTimer();
         initMotors(); //Initializes subsystem motors
         createLUTs(); //Initialize lookup tables
+        VoltageSensor voltageSensor;
+        voltageSensor = hardwareMap.get(VoltageSensor.class, "Control Hub");
+        voltage = voltageSensor.getVoltage();
+
+        //voltageMultiplier = ((voltage-12)/1.5);
+        voltageMultiplier = 1-((13.0-voltage)/13.0)*2;
+        if (voltageMultiplier > 1) {
+            voltageMultiplier = 1;
+        }
+        if (voltageMultiplier < .8) {
+            voltageMultiplier = .8;
+        }
+
+        List<LynxModule> hubs = hardwareMap.getAll(LynxModule.class);
+        hubs.forEach(hub -> hub.setBulkCachingMode(LynxModule.BulkCachingMode.MANUAL)); //Bulk read to reduce loop time
 
         //Initialize PP Follower
         follower= Constants.createFollower(hardwareMap);
@@ -224,13 +251,14 @@ public class ILT_Auto extends LinearOpMode {
             telemetry.addLine("A for 12 ball, X for 15 ball, B for 18 ball, Y for far zone (9)");
             telemetry.addData("Team Selected:", team);
             telemetry.addData("Auto Selected:",selectedAuto);
+            if (selectedAuto == 15.5) telemetry.addLine("THIS IS ALLIANCE COMPATIBLE");
             telemetry.update();
             if (gamepad1.left_stick_button) {
                 team = "blue";
             } else if (gamepad1.right_stick_button) {
                 team = "red";
             }
-            if (gamepad1.a) selectedAuto = 12;
+            if (gamepad1.a) selectedAuto = 15.5;
             else if (gamepad1.x) selectedAuto = 15;
             else if (gamepad1.b) selectedAuto = 18;
         }
@@ -242,8 +270,6 @@ public class ILT_Auto extends LinearOpMode {
         if (selectedAuto == 15) buildPaths15();
         if (selectedAuto == 18) buildPaths18();
 
-        List<LynxModule> hubs = hardwareMap.getAll(LynxModule.class);
-        hubs.forEach(hub -> hub.setBulkCachingMode(LynxModule.BulkCachingMode.MANUAL)); //Bulk read to reduce loop time
 
         launchTimer.reset();
         autoTimer.reset();
@@ -316,8 +342,6 @@ public class ILT_Auto extends LinearOpMode {
         hoodServo = new ServoEx(hardwareMap,"hoodServo",0, 300);
         hoodServo.setPwm(new PwmControl.PwmRange(500,2500));
         hoodServo.setInverted(true);
-        blockerServo = new ServoEx(hardwareMap,"blockerServo ",0, 180);
-        blockerServo.setPwm(new PwmControl.PwmRange(500,2500));
     }
 
     public void createLUTs() {
@@ -325,6 +349,19 @@ public class ILT_Auto extends LinearOpMode {
 
         //Add values (obtained empirically)
         //Input is distance, output is shooter velocity
+//        rangeLUT.add(20, 0.43);
+//        rangeLUT.add(48, 0.44);
+//        rangeLUT.add(55, 0.45);
+//        rangeLUT.add(65.7, 0.48);
+//        rangeLUT.add(75, 0.5);
+//        rangeLUT.add(85, 0.54);
+//        rangeLUT.add(100, .57);
+//        rangeLUT.add(110, 0.6);
+//        rangeLUT.add(115, 0.62);
+//        rangeLUT.add(123, 0.69);
+//        rangeLUT.add(130, 0.69);
+//        rangeLUT.add(140, 0.76);
+//        rangeLUT.add(160, 0.81);
         if (speedOverride == 0) {
             rangeLUT.add(47,0.4);
             rangeLUT.add(55,0.41);
@@ -333,9 +370,9 @@ public class ILT_Auto extends LinearOpMode {
             rangeLUT.add(85,.47);
             rangeLUT.add(95,0.5);
             rangeLUT.add(106,0.52);
-            rangeLUT.add(126,.58);
-            rangeLUT.add(147,.62);
-            rangeLUT.add(160,0.66);
+            rangeLUT.add(126,.56);
+            rangeLUT.add(147,.6);
+            rangeLUT.add(160,0.64);
         } else {
             rangeLUT.add(20,speedOverride);
             rangeLUT.add(160,speedOverride);
@@ -365,9 +402,9 @@ public class ILT_Auto extends LinearOpMode {
             hoodLUT.add(85,39);
             hoodLUT.add(95,40);
             hoodLUT.add(106,42);
-            hoodLUT.add(126, 44);
-            hoodLUT.add(147, 47);
-            hoodLUT.add(160,49);
+            hoodLUT.add(126, 45);
+            hoodLUT.add(147, 48);
+            hoodLUT.add(160,50);
         } else {
             hoodLUT.add(0,angleOverride);
             hoodLUT.add(160,angleOverride);
@@ -376,7 +413,6 @@ public class ILT_Auto extends LinearOpMode {
     }
 
     public void auto() {
-        DriverInput();
         sensorTeleOp();
         DTTeleOp();
         turretTeleOp();
@@ -514,9 +550,17 @@ public class ILT_Auto extends LinearOpMode {
     }
 
     public void sensorTeleOp() {
-        double distance1 = distanceSensor1.getDistance(DistanceUnit.INCH);
-        double distance2 = distanceSensor2.getDistance(DistanceUnit.INCH);
-        double colorAlpha = colorSensor.alpha();
+        if(cyclesSinceUpdate == 2) {
+            distance1 = distanceSensor1.getDistance(DistanceUnit.INCH);
+        }
+        else if(cyclesSinceUpdate == 4) {
+            colorAlpha = colorSensor.alpha();
+        }
+        else if(cyclesSinceUpdate == 6) {
+            distance2 = distanceSensor2.getDistance(DistanceUnit.INCH);
+            cyclesSinceUpdate = 0;
+        }
+        cyclesSinceUpdate++;
 
         prev2BallIn1 = prevBallIn1;
         prev2BallIn2 = prevBallIn2;
@@ -525,7 +569,7 @@ public class ILT_Auto extends LinearOpMode {
         prevBallIn2 = ballIn2;
         prevBallIn3 = ballIn3;
         ballIn1 = distance1 < 4;
-        ballIn2 = colorAlpha > 50;
+        ballIn2 = colorAlpha > 70;
         ballIn3 = distance2 < 4;
 
         telemetryM.addData("Distance1", distance1);
@@ -558,24 +602,19 @@ public class ILT_Auto extends LinearOpMode {
             case "idle":
                 intakeisReady = true;
                 intake.stopMotor();
-                blockerServo.set(openAngle);
                 break;
             case "firing":
 //                if (Math.abs(intake.getVelocity()) < 300) intake.set(1.0);
 //                else intake.set(transferLoadSpeed);
                 intake.set(transferLoadSpeed);
-                blockerServo.set(openAngle);
                 break;
             case "intaking":
                 intake.set(intakePickupSpeed);
-                blockerServo.set(closedAngle);
-                if (ballIn1 && ballIn2 && ballIn3 && prevBallIn1 && prevBallIn2 && prevBallIn3 && prev2BallIn1 && prev2BallIn2 && prev2BallIn3 ) {
-                    isFull = true;
+                if (ballIn1 && ballIn2 && ballIn3 && prevBallIn1 && prevBallIn2 && prevBallIn3 && prev2BallIn1 && prev2BallIn2 && prev2BallIn3) {
                     intakeState = "idle";
-                    if (Objects.equals(launcherState,"rejecting")) {
-                        launcherState = "idle";
-                    }
-                } else isFull = false;
+                    //launcherState = "preparing";
+                    turretState = "tracking";
+                }
                 break;
             case "rejecting":
                 intake.set(intakeRejectSpeed);
@@ -678,11 +717,16 @@ public class ILT_Auto extends LinearOpMode {
     }
 
     public double calculateRangeLUT(double input) {
-        if (input < 20 || input > 160) {
-            return launcherTestSpeed;
+        if (input < 47) {
+            transferLoadSpeed = 0;
+            return rangeLUT.get(48);
+        } else if (input > 160) {
+            transferLoadSpeed = 0;
+            return rangeLUT.get(159);
         } else {
-            if (90 < input && input < 110) transferLoadSpeed = 0.8;
-            else if (input > 130) transferLoadSpeed = 0.6;
+            if (70 < input && input < 90) transferLoadSpeed = 0.8 * voltageMultiplier;
+            if (90 < input && input < 110) transferLoadSpeed = 0.6 * voltageMultiplier;
+            else if (input > 110) transferLoadSpeed = 0.55 * voltageMultiplier;
             else transferLoadSpeed = 1;
             return rangeLUT.get(input);
         }
