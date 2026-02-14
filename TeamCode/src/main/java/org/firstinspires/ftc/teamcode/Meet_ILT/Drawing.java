@@ -17,10 +17,10 @@ public class Drawing {
     );
     FieldManager panelsField = PanelsField.INSTANCE.getField();
 
-    void initilize() {
+    public void initilize() {
         panelsField.setOffsets(PanelsField.INSTANCE.getPresets().getPEDRO_PATHING());
     }
-    void drawRobot(Position pose, YawPitchRollAngles rollAngles) {
+    public void drawRobot(Position pose, YawPitchRollAngles rollAngles) {
         panelsField.setStyle(robotLook);
         panelsField.moveCursor(pose.x, pose.y);
         panelsField.circle(10);

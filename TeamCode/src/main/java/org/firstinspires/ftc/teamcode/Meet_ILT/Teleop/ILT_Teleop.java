@@ -1,6 +1,7 @@
 package org.firstinspires.ftc.teamcode.Meet_ILT.Teleop;
 
 import static org.firstinspires.ftc.teamcode.meet2.Meet2Auto.shooterSpeedGap;
+import static org.firstinspires.ftc.teamcode.pedroPathing.Tuning.draw;
 import static org.firstinspires.ftc.teamcode.pedroPathing.Tuning.follower;
 
 import com.bylazar.configurables.annotations.Configurable;
@@ -12,14 +13,21 @@ import com.pedropathing.geometry.Pose;
 import com.qualcomm.hardware.lynx.LynxModule;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
+import com.qualcomm.robotcore.hardware.ColorSensor;
+import com.qualcomm.robotcore.hardware.DistanceSensor;
+import com.qualcomm.robotcore.hardware.PwmControl;
 import com.qualcomm.robotcore.util.ElapsedTime;
+import com.seattlesolvers.solverslib.controller.PIDController;
 import com.seattlesolvers.solverslib.controller.PIDFController;
 import com.seattlesolvers.solverslib.drivebase.MecanumDrive;
+import com.seattlesolvers.solverslib.hardware.ServoEx;
 import com.seattlesolvers.solverslib.hardware.motors.Motor;
 import com.seattlesolvers.solverslib.hardware.motors.MotorEx;
 import com.seattlesolvers.solverslib.hardware.motors.MotorGroup;
 import com.seattlesolvers.solverslib.util.InterpLUT;
 
+import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
+import org.firstinspires.ftc.teamcode.Meet_ILT.Drawing;
 import org.firstinspires.ftc.teamcode.meet3.Meet3Auto;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 import org.firstinspires.ftc.vision.VisionPortal;
@@ -35,6 +43,8 @@ public class ILT_Teleop extends LinearOpMode {
     static TelemetryManager telemetryM;
 
     //April Tag Variables
+    private boolean isFull = false;
+
 
     //Pedropathing Variables
     private Pose currentPose;
@@ -42,11 +52,10 @@ public class ILT_Teleop extends LinearOpMode {
     private final ElapsedTime launchTimer = new ElapsedTime(ElapsedTime.Resolution.SECONDS);
 
     private MotorEx fL, fR, bL, bR, launcher1, launcher2, turret, intake;
-   // private NormalizedColorSensor testSensor;
-    //private double hue;
-    //private String color = "none";
-    //private DistanceSensor testDistanceSensor;
-    private String DTState="drive", intakeState="idle", turretState="idle", launcherState="idle";
+    private ServoEx hoodServo, blockerServo;
+    private DistanceSensor distanceSensor1, distanceSensor2;
+    private ColorSensor colorSensor;
+    private String DTState="drive", intakeState="idle", turretState="idle", launcherState="idle", hoodState="idle";
     private boolean DTisReady, intakeisReady, turretisReady, launcherisReady;
     private MotorGroup launcher;
     private ElapsedTime teleTimer;
@@ -61,12 +70,17 @@ public class ILT_Teleop extends LinearOpMode {
     private Pose aprilTagPose;
     private Pose poseResetPose;
     private boolean useRealStart = false;
+    public static Pose endPose;
     //Lookup Tables
-    private InterpLUT velocityLUT = new InterpLUT(), rangeLUT= new InterpLUT();
+    private InterpLUT velocityLUT = new InterpLUT(), rangeLUT= new InterpLUT(), hoodLUT = new InterpLUT();
 
     //DT Variables
     private double driveInput, strafeInput, turnInput;
     private double driveAngleDegrees = 0;
+
+    //Launcher Test Variables
+    public static double speedOverride = 0;
+    public static double angleOverride = 0;
 
     //Launcher Variables
     public static double kp = 1.5;
@@ -75,6 +89,17 @@ public class ILT_Teleop extends LinearOpMode {
     private double launcherTargetVelocity;
     public static double launcherTestSpeed = 0.65;
     public double odoRange = 0;
+    public boolean isIdle = true;
+
+    //Hood Variables
+    public double hoodTargetAngle = 40;
+    public static double minHoodAngle = 33;
+    public static double maxHoodAngle = 57;
+    public static double hoodOffset = -1.5;
+
+    //Blocker Variables
+    public double closedAngle = 0;
+    public double openAngle = 180;
 
     //Intake Variables
     public static double intakePickupSpeed = 1.0;
@@ -83,6 +108,7 @@ public class ILT_Teleop extends LinearOpMode {
 
     //Turret Variables
     private PIDFController turretPIDF;
+    private PIDController launcherPID;
     public static double turretTolerance = 2;
     public static double tkP = 0.0025;
     public static double tkI = 0;
@@ -96,14 +122,21 @@ public class ILT_Teleop extends LinearOpMode {
     private double turretDriftOffset = 0;
     private boolean driftAdjustToggle = false;
 
+    //Sensor Variables
+    boolean ballIn1, ballIn2, ballIn3, prevBallIn1, prevBallIn2, prevBallIn3, prev2BallIn1, prev2BallIn2, prev2BallIn3;
+
+
     //The variable to store our instance of the vision portal.
 
     private VisionPortal visionPortal;
 
+    private Drawing drawing;
+
     @Override
     public void runOpMode() {
+        drawing = new Drawing();
         telemetryM = PanelsTelemetry.INSTANCE.getTelemetry();
-        LoopTimer timer = new LoopTimer();
+        LoopTimer time = new LoopTimer();
 
         //set the default settings for motors and initializes them (wow)
         initMotors();
@@ -132,12 +165,24 @@ public class ILT_Teleop extends LinearOpMode {
         if (Meet3Auto.endPosition.getX() != 0 && !useRealStart) {
             startPose = Meet3Auto.endPosition;
         } else {
-            turret.resetEncoder();
+            try {
+                if (endPose.getX() != 0 && !useRealStart){
+                    startPose = endPose;
+                }
+            } catch (NullPointerException ignored) {
+            }
+            try {
+                if (startPose.getX() == 0 && useRealStart){
+                    turret.resetEncoder();
+                }
+            } catch (NullPointerException ignored) {
+            }
         }
         follower.setStartingPose(startPose);
         if (opModeIsActive()) {
             teleTimer.reset();
             while (opModeIsActive()) {
+                time.start();
                 hubs.forEach(LynxModule::clearBulkCache);
                 follower.update();
                 currentPose = follower.getPose();
@@ -145,10 +190,13 @@ public class ILT_Teleop extends LinearOpMode {
 
 
                 telemetryUpdate();
+                time.end();
+                telemetryM.addData("looptime(hz)",time.getHz());
                 telemetryM.update(telemetry);
 
             }
         }
+        endPose = follower.getPose();
 
     }   // end method runOpMode()
 
@@ -160,12 +208,15 @@ public class ILT_Teleop extends LinearOpMode {
         telemetryM.addData("Goal Distance",odoRange);
         telemetryM.addLine("Launcher Info");
         telemetryM.addData("Launcher Velocity",launcher.getVelocity());
+        telemetryM.addData("Launcher Target",velocityLUT.get(launcherTargetVelocity));
+        telemetryM.addData("Launcher Power",launcher.get());
         telemetryM.addLine("Turret Info");
         telemetryM.addData("Turret Target",turretTargetPos);
         telemetryM.addData("Turret Pos",turret.getCurrentPosition());
-        telemetryM.addData("Turret Angle",turret.getCurrentPosition() * 360/978.7);
+        telemetryM.addData("Turret Angle",turret.getCurrentPosition() * 360/1076.6);
         telemetryM.addData("Turret Motor Power",turret.get());
         //telemetryM.addData("Distance",testDistanceSensor.getDistance(DistanceUnit.INCH));
+        //drawing.drawRobot(new Pose(currentPose.getX(),currentPose.getY()), currentPose.getHeading());
     }
 
     public void initMotors() {
@@ -183,26 +234,149 @@ public class ILT_Teleop extends LinearOpMode {
         launcher2.setInverted(true);
         launcher1.setVeloCoefficients(kp,ki,kd);
         launcher2.setVeloCoefficients(kp,ki,kd);
+        //launcher1.setFeedforwardCoefficients(ks,kv);
+        //launcher2.setFeedforwardCoefficients(ks,kv);
         launcher1.setRunMode(Motor.RunMode.VelocityControl);
         launcher2.setRunMode(Motor.RunMode.VelocityControl);
         drive = new MecanumDrive(fL, fR, bL, bR);
         drive.setRightSideInverted(false);
         turretPIDF = new PIDFController(tkP, tkI, tkD, 0);
         turretPIDF.setIntegrationBounds(-errorTotal,errorTotal);
+        //launcherPID = new PIDController(kp,ki,kd);
         launcher = new MotorGroup(launcher1, launcher2);
-        //testSensor = hardwareMap.get(NormalizedColorSensor.class,"testSensor");
-        //testDistanceSensor = hardwareMap.get(DistanceSensor.class,"distSensor");
+        distanceSensor1 = hardwareMap.get(DistanceSensor.class, "firstDistanceSensor");
+        distanceSensor2 = hardwareMap.get(DistanceSensor.class, "thirdDistanceSensor");
+        colorSensor = hardwareMap.get(ColorSensor.class, "colorSensor");
+        hoodServo = new ServoEx(hardwareMap,"hoodServo",0, 300);
+        hoodServo.setPwm(new PwmControl.PwmRange(500,2500));
+        hoodServo.setInverted(true);
+        blockerServo = new ServoEx(hardwareMap,"blockerServo ",0, 180);
+        blockerServo.setPwm(new PwmControl.PwmRange(500,2500));
+        blockerServo.setInverted(true);
+    }
+
+    public void createLUTs() {
+        //create shooting speed lookup table
+
+        //Add values (obtained empirically)
+        //Input is distance, output is shooter velocity
+//        rangeLUT.add(20, 0.43);
+//        rangeLUT.add(48, 0.44);
+//        rangeLUT.add(55, 0.45);
+//        rangeLUT.add(65.7, 0.48);
+//        rangeLUT.add(75, 0.5);
+//        rangeLUT.add(85, 0.54);
+//        rangeLUT.add(100, .57);
+//        rangeLUT.add(110, 0.6);
+//        rangeLUT.add(115, 0.62);
+//        rangeLUT.add(123, 0.69);
+//        rangeLUT.add(130, 0.69);
+//        rangeLUT.add(140, 0.76);
+//        rangeLUT.add(160, 0.81);
+        if (speedOverride == 0) {
+            rangeLUT.add(47,0.4);
+            rangeLUT.add(55,0.41);
+            rangeLUT.add(65,0.44);
+            rangeLUT.add(75,0.47);
+            rangeLUT.add(85,.47);
+            rangeLUT.add(95,0.5);
+            rangeLUT.add(106,0.52);
+            rangeLUT.add(126,.56);
+            rangeLUT.add(147,.6);
+            rangeLUT.add(160,0.64);
+        } else {
+            rangeLUT.add(20,speedOverride);
+            rangeLUT.add(160,speedOverride);
+        }
+        rangeLUT.createLUT();
+
+        velocityLUT.add(-1.001,2500);
+        velocityLUT.add(-0.8,2000);
+        velocityLUT.add(-0.6,1500);
+        velocityLUT.add(-.4,1000);
+        velocityLUT.add(-.2,500);
+        velocityLUT.add(0,0);
+        velocityLUT.add(0.2,500);
+        velocityLUT.add(0.4,1000);
+        velocityLUT.add(0.6,1500);
+        velocityLUT.add(0.8,2000);
+        velocityLUT.add(1.001,2500);
+        velocityLUT.createLUT();
+
+        if (angleOverride == 0) {
+            hoodLUT.add(0, 33);
+            hoodLUT.add(20, 33);
+            hoodLUT.add(47,33);
+            hoodLUT.add(55,33);
+            hoodLUT.add(65,35);
+            hoodLUT.add(75,36);
+            hoodLUT.add(85,39);
+            hoodLUT.add(95,40);
+            hoodLUT.add(106,42);
+            hoodLUT.add(126, 45);
+            hoodLUT.add(147, 48);
+            hoodLUT.add(160,50);
+        } else {
+            hoodLUT.add(0,angleOverride);
+            hoodLUT.add(160,angleOverride);
+        }
+        hoodLUT.createLUT();
     }
 
     public void teleOp() {
         DriverInput();
+        sensorTeleOp();
         DTTeleOp();
         turretTeleOp();
         launcherTeleOp();
         intakeTeleOp();
+        hoodTeleOp();
     }
 
+    public void hoodTeleOp() {
+        switch (hoodState) {
+            case "idle":
+                hoodServo.set(hoodToServoAngle(hoodTargetAngle));
+                break;
+            case "up":
+                hoodTargetAngle = maxHoodAngle;
+                hoodServo.set(hoodToServoAngle(hoodTargetAngle));
+                break;
+            case "down":
+                hoodTargetAngle = minHoodAngle;
+                hoodServo.set(hoodToServoAngle(hoodTargetAngle));
+                break;
+            case "adjusting":
+                hoodTargetAngle = hoodToServoAngle(angleLUT(odoRange));
+                hoodServo.set(hoodTargetAngle);
+                break;
+        }
+        telemetryM.addData("Hood Angle",hoodTargetAngle);
+        telemetryM.addData("Servo Angle",hoodServo.get());
+    }
+
+    public double servoToHoodAngle(double servoInput) {
+        return (servoInput) * 13 / 121 + minHoodAngle + hoodOffset;
+    }
+
+    public double hoodToServoAngle(double hoodAngle) {
+        return (hoodAngle-minHoodAngle - hoodOffset) * 121 / 13;
+    }
+
+    public double angleLUT(double range) {
+        if (range > 20 && range < 160) return hoodLUT.get(range);
+        else return 45;
+    }
     public void DriverInput() {
+
+//        if (gamepad1.dpad_up) {
+//            hoodState = "up";
+//        } else if (gamepad1.dpad_down) {
+//            hoodState = "down";
+//        } else if (gamepad1.dpad_left) {
+//            hoodState = "idle";
+//        }
+
         //DT Section
         strafeInput = gamepad1.left_stick_x;
         driveInput = -gamepad1.left_stick_y;
@@ -225,8 +399,8 @@ public class ILT_Teleop extends LinearOpMode {
         //Intake Section
         if (gamepad2.a || gamepad1.a) {
             intakeState = "intaking";
-            launcherState = "rejecting";
-        } else if (gamepad2.y || gamepad1.y) {
+            //launcherState = "rejecting";
+        } else if (gamepad2.y || gamepad1.dpad_down) {
             intakeState = "rejecting";
             launcherState = "rejecting";
         } else if (gamepad2.b || gamepad1.b) {
@@ -240,6 +414,12 @@ public class ILT_Teleop extends LinearOpMode {
             intakeState = "idle";
             turretState = "idle";
             launcherState = "idle";
+            //hoodState = "idle";
+        }
+        if (gamepad1.y) {
+            intakeState = "readyToFire";
+            launcherState = "preparing";
+            turretState = "tracking";
         }
 
         //Launcher Section
@@ -251,7 +431,7 @@ public class ILT_Teleop extends LinearOpMode {
         if (gamepad1.right_bumper || gamepad2.right_bumper) {
             launcherState = "beginLaunchSequence";
             turretState = "aiming";
-            intakeState = "idle";
+            intakeState = "readyToFire";
             launchTimer.reset();
         }
 
@@ -286,6 +466,29 @@ public class ILT_Teleop extends LinearOpMode {
         driveAngleDegrees = Math.toDegrees(currentPose.getHeading());
     }
 
+    public void sensorTeleOp() {
+        double distance1 = distanceSensor1.getDistance(DistanceUnit.INCH);
+        double distance2 = distanceSensor2.getDistance(DistanceUnit.INCH);
+        double colorAlpha = colorSensor.alpha();
+
+        prev2BallIn1 = prevBallIn1;
+        prev2BallIn2 = prevBallIn2;
+        prev2BallIn3 = prevBallIn3;
+        prevBallIn1 = ballIn1;
+        prevBallIn2 = ballIn2;
+        prevBallIn3 = ballIn3;
+        ballIn1 = distance1 < 4;
+        ballIn2 = colorAlpha > 50;
+        ballIn3 = distance2 < 4;
+
+        telemetryM.addData("Distance1", distance1);
+        telemetryM.addData("Distance2", distance2);
+        telemetryM.addData("Ball in 1?", ballIn1);
+        telemetryM.addData("Ball in 2?", ballIn2);
+        telemetryM.addData("Ball in 3?", ballIn3);
+    }
+
+
     public void DTTeleOp() {
 
         switch (DTState){
@@ -308,14 +511,26 @@ public class ILT_Teleop extends LinearOpMode {
             case "idle":
                 intakeisReady = true;
                 intake.stopMotor();
+                blockerServo.set(closedAngle);
+                break;
+            case "readyToFire":
+                intake.stopMotor();
+                blockerServo.set(openAngle);
                 break;
             case "firing":
 //                if (Math.abs(intake.getVelocity()) < 300) intake.set(1.0);
 //                else intake.set(transferLoadSpeed);
                 intake.set(transferLoadSpeed);
+                blockerServo.set(openAngle);
                 break;
             case "intaking":
                 intake.set(intakePickupSpeed);
+                blockerServo.set(closedAngle);
+                if (ballIn1 && ballIn2 && ballIn3 && prevBallIn1 && prevBallIn2 && prevBallIn3 && prev2BallIn1 && prev2BallIn2 && prev2BallIn3) {
+                    intakeState = "readyToFire";
+                    launcherState = "preparing";
+                    turretState = "tracking";
+                }
                 break;
             case "rejecting":
                 intake.set(intakeRejectSpeed);
@@ -357,11 +572,10 @@ public class ILT_Teleop extends LinearOpMode {
         double botY = currentPose.getY();
         double goalX = goalPose.getX();
         double goalY = goalPose.getY();
-        //if (Objects.equals(launcherState, "firing")) launcher.setRunMode(Motor.RunMode.RawPower);
-        //else launcher.setRunMode(Motor.RunMode.VelocityControl);
         switch (launcherState){
             case "idle":
                 launcherisReady = true;
+                isIdle = true;
                 launcher.stopMotor();
                 odoRange = Math.hypot(goalX-botX,goalY-botY);
                 break;
@@ -374,8 +588,10 @@ public class ILT_Teleop extends LinearOpMode {
                 launchTimer.reset();
                 launcher.set(launcherTargetVelocity);
                 launcherisReady = false;
+                intakeState = "readyToFire";
                 launcherState = "aiming";
                 turretState = "aiming";
+                hoodState = "adjusting";
                 break;
             case "aiming":
                 launcherSpinUp();
@@ -395,10 +611,10 @@ public class ILT_Teleop extends LinearOpMode {
                 }
             case "firing":
                 launcherSpinUp();
-                if (launcher.getVelocity() > velocityLUT.get(launcherTargetVelocity)) {
-                    launcher.set(launcherTargetVelocity);
-                } else launcher.set(1);
                 //launcher.set(launcherTargetVelocity);
+                if (launcher.getVelocity() > velocityLUT.get(launcherTargetVelocity)) {
+                    launcher.stopMotor();
+                } else launcher.set(1);
                 if (Objects.equals(turretState,"aiming") || (follower.getVelocity().getMagnitude() > 6 && Math.abs(follower.getAngularVelocity()) < 0.5)) {
                     intakeState = "idle";
                     launcherState = "acc_ready";
@@ -416,59 +632,36 @@ public class ILT_Teleop extends LinearOpMode {
         }
     }
 
-    public void createLUTs() {
-        //create shooting speed lookup table
-
-        //Add values (obtained empirically)
-        //Input is distance, output is shooter velocity
-//        rangeLUT.add(20,0.43);
-//        rangeLUT.add(48,0.43);
-//        rangeLUT.add(55,0.43);
-//        rangeLUT.add(65.7,0.45);
-//        rangeLUT.add(75,0.475);
-//        rangeLUT.add(85,0.5);
-//        rangeLUT.add(100,.53);
-//        rangeLUT.add(110,0.55);
-//        rangeLUT.add(115,0.57);
-//        rangeLUT.add(123,0.67);
-//        rangeLUT.add(130,0.67);
-//        rangeLUT.add(140,0.74);
-//        rangeLUT.add(160,0.79);
-        rangeLUT.add(20,0.46);
-        rangeLUT.add(48,0.46);
-        rangeLUT.add(55,0.46);
-        rangeLUT.add(65.7,0.48);
-        rangeLUT.add(75,0.5);
-        rangeLUT.add(85,0.54);
-        rangeLUT.add(100,.57);
-        rangeLUT.add(110,0.6);
-        rangeLUT.add(115,0.62);
-        rangeLUT.add(123,0.69);
-        rangeLUT.add(130,0.69);
-        rangeLUT.add(140,0.76);
-        rangeLUT.add(160,0.81);
-        rangeLUT.createLUT();
-
-        velocityLUT.add(-1,2500);
-        velocityLUT.add(-0.8,2000);
-        velocityLUT.add(-0.6,1500);
-        velocityLUT.add(-.4,1000);
-        velocityLUT.add(-.2,500);
-        velocityLUT.add(0,0);
-        velocityLUT.add(0.2,500);
-        velocityLUT.add(0.4,1000);
-        velocityLUT.add(0.6,1500);
-        velocityLUT.add(0.8,2000);
-        velocityLUT.add(1,2500);
-        velocityLUT.createLUT();
-    }
+//    public void launcherControlLoop() {
+//        if (launcherTargetVelocity > 1) launcherTargetVelocity = 1;
+//        if (launcherTargetVelocity < -1) launcherTargetVelocity = -1;
+//        double launcherPower = launcherPID.calculate(velocityLUT.get(launcherTargetVelocity),launcher.getVelocity());
+//        if (launcherPower < -1) launcherPower = -1;
+//        if (launcherPower > 1) launcherPower = 1;
+//        if (Objects.equals(launcherState, "firing") && launcher.getVelocity() < velocityLUT.get(launcherTargetVelocity)) {
+//            launcherPower = 1;
+//        } else if (Objects.equals(launcherState,"firing")){
+//            launcherPower = 0;
+//        }
+//        if (!isIdle) launcher.set(launcherPower);
+//        else {
+//            isIdle = false;
+//            launcherPower = 0;
+//        }
+//        telemetryM.addData("Launcher Power",launcherPower);
+//    }
 
     public double calculateRangeLUT(double input) {
-        if (input < 20 || input > 160) {
-            if (input > 110) transferLoadSpeed = 0.6;
-            else transferLoadSpeed = 0.8;
-            return launcherTestSpeed;
+        if (input < 47) {
+            transferLoadSpeed = 0;
+            return rangeLUT.get(48);
+        } else if (input > 160) {
+            transferLoadSpeed = 0;
+            return rangeLUT.get(159);
         } else {
+            if (90 < input && input < 130) transferLoadSpeed = 0.8;
+            else if (input > 130) transferLoadSpeed = 0.6;
+            else transferLoadSpeed = 1;
             return rangeLUT.get(input);
         }
     }
@@ -533,7 +726,7 @@ public class ILT_Teleop extends LinearOpMode {
         } else if (realAngle < -180) {
             realAngle += 360;
         }
-        if ((realAngle > 160 && turret.getCurrentPosition() < 0) || (realAngle < -160 && turret.getCurrentPosition() > 0)) {
+        if ((realAngle > 175 && turret.getCurrentPosition() < 0) || (realAngle < -160 && turret.getCurrentPosition() > 0)) {
             turretAngleLimited = true;
             return turretTicksToAngle(turretTargetPos);
         } else turretAngleLimited = false;
@@ -550,13 +743,13 @@ public class ILT_Teleop extends LinearOpMode {
     public void updateTeamDependents() {
         if (Objects.equals(team,"blue")){
             goalID = 20;
-            startPose = new Pose(18.5,118.5,Math.toRadians(143+180));
+            startPose = new Pose(17.5,119.5,Math.toRadians(143+180));
             goalPose = new Pose(0,144,Math.toRadians(135));
             poseResetPose = new Pose(114,7,Math.toRadians(90)); //need to find good one
             aprilTagPose = new Pose(15,130,0);
         } else if (Objects.equals(team,"red")) {
             goalID = 24;
-            startPose = new Pose(x(18.5),118.5,a(143+180));
+            startPose = new Pose(x(17.5),119.5,a(143+180));
             goalPose = new Pose(144,144,Math.toRadians(45));
             poseResetPose = new Pose(30,7,Math.toRadians(90)); //need to find good one
             aprilTagPose = new Pose(129,130,0);

@@ -10,6 +10,7 @@ import com.bylazar.telemetry.TelemetryManager;
 import com.bylazar.utils.LoopTimer;
 import com.pedropathing.geometry.Pose;
 import com.qualcomm.hardware.lynx.LynxModule;
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.ColorSensor;
@@ -38,6 +39,7 @@ import java.util.List;
 import java.util.Objects;
 
 @TeleOp(name = "Meet 3 Teleop")
+@Disabled
 @Configurable
 public class Meet3Teleop extends LinearOpMode {
 
@@ -71,7 +73,7 @@ public class Meet3Teleop extends LinearOpMode {
     private Pose poseResetPose;
     private boolean useRealStart = false;
     //Lookup Tables
-    private InterpLUT velocityLUT = new InterpLUT(), rangeLUT= new InterpLUT();
+    private InterpLUT velocityLUT = new InterpLUT(), rangeLUT= new InterpLUT(), hoodLUT = new InterpLUT();
 
     //DT Variables
     private double driveInput, strafeInput, turnInput;
@@ -220,6 +222,57 @@ public class Meet3Teleop extends LinearOpMode {
         hoodServo.setInverted(true);
     }
 
+    public void createLUTs() {
+        //create shooting speed lookup table
+
+        //Add values (obtained empirically)
+        //Input is distance, output is shooter velocity
+//        rangeLUT.add(20,0.43);
+//        rangeLUT.add(48,0.43);
+//        rangeLUT.add(55,0.43);
+//        rangeLUT.add(65.7,0.45);
+//        rangeLUT.add(75,0.475);
+//        rangeLUT.add(85,0.5);
+//        rangeLUT.add(100,.53);
+//        rangeLUT.add(110,0.55);
+//        rangeLUT.add(115,0.57);
+//        rangeLUT.add(123,0.67);
+//        rangeLUT.add(130,0.67);
+//        rangeLUT.add(140,0.74);
+//        rangeLUT.add(160,0.79);
+        rangeLUT.add(20,0.43);
+        rangeLUT.add(48,0.44);
+        rangeLUT.add(55,0.45);
+        rangeLUT.add(65.7,0.48);
+        rangeLUT.add(75,0.5);
+        rangeLUT.add(85,0.54);
+        rangeLUT.add(100,.57);
+        rangeLUT.add(110,0.6);
+        rangeLUT.add(115,0.62);
+        rangeLUT.add(123,0.69);
+        rangeLUT.add(130,0.69);
+        rangeLUT.add(140,0.76);
+        rangeLUT.add(160,0.81);
+        rangeLUT.createLUT();
+
+        velocityLUT.add(-1,2500);
+        velocityLUT.add(-0.8,2000);
+        velocityLUT.add(-0.6,1500);
+        velocityLUT.add(-.4,1000);
+        velocityLUT.add(-.2,500);
+        velocityLUT.add(0,0);
+        velocityLUT.add(0.2,500);
+        velocityLUT.add(0.4,1000);
+        velocityLUT.add(0.6,1500);
+        velocityLUT.add(0.8,2000);
+        velocityLUT.add(1,2500);
+        velocityLUT.createLUT();
+
+        hoodLUT.add(20,33);
+        hoodLUT.add(160,55);
+        hoodLUT.createLUT();
+    }
+
     public void teleOp() {
         DriverInput();
         sensorTeleOp();
@@ -243,6 +296,9 @@ public class Meet3Teleop extends LinearOpMode {
                 hoodTargetAngle = minHoodAngle;
                 hoodServo.set(hoodToServoAngle(hoodTargetAngle));
                 break;
+            case "adjusting":
+                hoodServo.set(hoodToServoAngle(hoodLUT.get(odoRange)));
+                break;
         }
         telemetryM.addData("Hood Angle",hoodTargetAngle);
         telemetryM.addData("Servo Angle",hoodServo.get());
@@ -265,9 +321,6 @@ public class Meet3Teleop extends LinearOpMode {
         } else if (gamepad1.dpad_left) {
             hoodState = "idle";
         }
-
-
-
 
         //DT Section
         strafeInput = gamepad1.left_stick_x;
@@ -484,7 +537,7 @@ public class Meet3Teleop extends LinearOpMode {
             case "firing":
                 launcherSpinUp();
                 if (launcher.getVelocity() > velocityLUT.get(launcherTargetVelocity)) {
-                    launcher.set(launcherTargetVelocity);
+                    launcher.stopMotor();
                 } else launcher.set(1);
                 //launcher.set(launcherTargetVelocity);
                 if (Objects.equals(turretState,"aiming") || (follower.getVelocity().getMagnitude() > 6 && Math.abs(follower.getAngularVelocity()) < 0.5)) {
@@ -504,59 +557,13 @@ public class Meet3Teleop extends LinearOpMode {
         }
     }
 
-    public void createLUTs() {
-        //create shooting speed lookup table
-
-        //Add values (obtained empirically)
-        //Input is distance, output is shooter velocity
-//        rangeLUT.add(20,0.43);
-//        rangeLUT.add(48,0.43);
-//        rangeLUT.add(55,0.43);
-//        rangeLUT.add(65.7,0.45);
-//        rangeLUT.add(75,0.475);
-//        rangeLUT.add(85,0.5);
-//        rangeLUT.add(100,.53);
-//        rangeLUT.add(110,0.55);
-//        rangeLUT.add(115,0.57);
-//        rangeLUT.add(123,0.67);
-//        rangeLUT.add(130,0.67);
-//        rangeLUT.add(140,0.74);
-//        rangeLUT.add(160,0.79);
-        rangeLUT.add(20,0.43);
-        rangeLUT.add(48,0.44);
-        rangeLUT.add(55,0.45);
-        rangeLUT.add(65.7,0.48);
-        rangeLUT.add(75,0.5);
-        rangeLUT.add(85,0.54);
-        rangeLUT.add(100,.57);
-        rangeLUT.add(110,0.6);
-        rangeLUT.add(115,0.62);
-        rangeLUT.add(123,0.69);
-        rangeLUT.add(130,0.69);
-        rangeLUT.add(140,0.76);
-        rangeLUT.add(160,0.81);
-        rangeLUT.createLUT();
-
-        velocityLUT.add(-1,2500);
-        velocityLUT.add(-0.8,2000);
-        velocityLUT.add(-0.6,1500);
-        velocityLUT.add(-.4,1000);
-        velocityLUT.add(-.2,500);
-        velocityLUT.add(0,0);
-        velocityLUT.add(0.2,500);
-        velocityLUT.add(0.4,1000);
-        velocityLUT.add(0.6,1500);
-        velocityLUT.add(0.8,2000);
-        velocityLUT.add(1,2500);
-        velocityLUT.createLUT();
-    }
-
     public double calculateRangeLUT(double input) {
         if (input < 20 || input > 160) {
-            if (input > 110) transferLoadSpeed = 0.6;
-            else transferLoadSpeed = 1;
             return launcherTestSpeed;
         } else {
+            if (80 < input && input < 110) transferLoadSpeed = 0.8;
+            else if (input > 110) transferLoadSpeed = 0.6;
+            else transferLoadSpeed = 1;
             return rangeLUT.get(input);
         }
     }
