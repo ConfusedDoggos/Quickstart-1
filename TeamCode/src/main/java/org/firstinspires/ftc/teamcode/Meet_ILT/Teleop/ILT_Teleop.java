@@ -32,6 +32,7 @@ import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.Position;
 import org.firstinspires.ftc.robotcore.external.navigation.YawPitchRollAngles;
 import org.firstinspires.ftc.teamcode.Meet_ILT.Drawing;
+import org.firstinspires.ftc.teamcode.Meet_ILT.ILT_Auto;
 import org.firstinspires.ftc.teamcode.meet3.Meet3Auto;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 import org.firstinspires.ftc.vision.VisionPortal;
@@ -126,14 +127,15 @@ public class ILT_Teleop extends LinearOpMode {
     private double turretDriftOffset = 0;
     private boolean driftAdjustToggle = false;
 
-    private double distance1;
-    private double distance2;
-    private double colorAlpha;
+    private double distance1=0;
+    private double distance2=0;
+    private double colorAlpha=0;
 
     private int cyclesSinceUpdate;
 
     //Sensor Variables
-    boolean ballIn1, ballIn2, ballIn3, prevBallIn1, prevBallIn2, prevBallIn3, prev2BallIn1, prev2BallIn2, prev2BallIn3;
+    boolean ballIn1, ballIn2, ballIn3, prevBallIn1, prevBallIn2, prevBallIn3;
+    boolean d1Active = true, cActive = true, d3Active = true;
 
     private double voltage;
     private double voltageMultiplier;
@@ -190,8 +192,8 @@ public class ILT_Teleop extends LinearOpMode {
             }
         }
         updateTeamDependents();
-        if (Meet3Auto.endPosition.getX() != 0 && !useRealStart) {
-            startPose = Meet3Auto.endPosition;
+        if (ILT_Auto.endPosition.getX() != 0 && !useRealStart) {
+            startPose = ILT_Auto.endPosition;
         } else {
             try {
                 if (endPose.getX() != 0 && !useRealStart){
@@ -339,9 +341,9 @@ public class ILT_Teleop extends LinearOpMode {
             hoodLUT.add(85,39);
             hoodLUT.add(95,40);
             hoodLUT.add(106,42);
-            hoodLUT.add(126, 45);
-            hoodLUT.add(147, 48);
-            hoodLUT.add(160,50);
+            hoodLUT.add(126, 44.5);
+            hoodLUT.add(147, 47.5);
+            hoodLUT.add(160,49);
         } else {
             hoodLUT.add(0,angleOverride);
             hoodLUT.add(160,angleOverride);
@@ -391,7 +393,7 @@ public class ILT_Teleop extends LinearOpMode {
 
     public double angleLUT(double range) {
         if (range > 20 && range < 160) return hoodLUT.get(range);
-        else return 45;
+        else return 50;
     }
     public void DriverInput() {
 
@@ -415,7 +417,7 @@ public class ILT_Teleop extends LinearOpMode {
             drive.setMaxSpeed(1);
         }
 
-        if (gamepad2.right_trigger > 0.4 && gamepad2.left_trigger > 0.4) {
+        if ((gamepad2.right_trigger > 0.4 && gamepad2.left_trigger > 0.4) || (gamepad1.right_trigger > 0.4 && gamepad1.left_trigger > 0.4)) {
             follower.setPose(poseResetPose);
         }
         if (gamepad2.right_stick_button && gamepad2.left_bumper) turret.resetEncoder();
@@ -443,9 +445,9 @@ public class ILT_Teleop extends LinearOpMode {
             //hoodState = "idle";
         }
         if (gamepad1.y) {
-//            intakeState = "idle";
-//            launcherState = "preparing";
+            intakeState = "idle";
             turretState = "tracking";
+//            launcherState = "preparing";
         }
 
         //Launcher Section
@@ -492,28 +494,24 @@ public class ILT_Teleop extends LinearOpMode {
         driveAngleDegrees = Math.toDegrees(currentPose.getHeading());
     }
 
-    public void sensorTeleOp() {;
-        if(cyclesSinceUpdate == 2) {
+    public void sensorTeleOp() {
+        if(cyclesSinceUpdate == 3) {
             distance1 = distanceSensor1.getDistance(DistanceUnit.INCH);
+            prevBallIn1 = ballIn1;
+            ballIn1 = distance1 < 4;
         }
-        else if(cyclesSinceUpdate == 4) {
+        if(cyclesSinceUpdate == 6) {
             colorAlpha = colorSensor.alpha();
+            prevBallIn2 = ballIn2;
+            ballIn2 = colorAlpha > 70;
         }
-        else if(cyclesSinceUpdate == 6) {
+        if(cyclesSinceUpdate == 9) {
             distance2 = distanceSensor2.getDistance(DistanceUnit.INCH);
             cyclesSinceUpdate = 0;
+            prevBallIn3 = ballIn3;
+            ballIn3 = distance2 < 4;
         }
         cyclesSinceUpdate++;
-
-        prev2BallIn1 = prevBallIn1;
-        prev2BallIn2 = prevBallIn2;
-        prev2BallIn3 = prevBallIn3;
-        prevBallIn1 = ballIn1;
-        prevBallIn2 = ballIn2;
-        prevBallIn3 = ballIn3;
-        ballIn1 = distance1 < 4;
-        ballIn2 = colorAlpha > 70;
-        ballIn3 = distance2 < 4;
 
         telemetryM.addData("Distance1", distance1);
         telemetryM.addData("Distance2", distance2);
@@ -553,7 +551,7 @@ public class ILT_Teleop extends LinearOpMode {
                 break;
             case "intaking":
                 intake.set(intakePickupSpeed);
-                if (ballIn1 && ballIn2 && ballIn3 && prevBallIn1 && prevBallIn2 && prevBallIn3 && prev2BallIn1 && prev2BallIn2 && prev2BallIn3) {
+                if (ballIn1 && ballIn2 && ballIn3 && prevBallIn1 && prevBallIn2 && prevBallIn3) {
                     intakeState = "idle";
                     //launcherState = "preparing";
                     turretState = "tracking";
@@ -659,25 +657,6 @@ public class ILT_Teleop extends LinearOpMode {
         }
     }
 
-//    public void launcherControlLoop() {
-//        if (launcherTargetVelocity > 1) launcherTargetVelocity = 1;
-//        if (launcherTargetVelocity < -1) launcherTargetVelocity = -1;
-//        double launcherPower = launcherPID.calculate(velocityLUT.get(launcherTargetVelocity),launcher.getVelocity());
-//        if (launcherPower < -1) launcherPower = -1;
-//        if (launcherPower > 1) launcherPower = 1;
-//        if (Objects.equals(launcherState, "firing") && launcher.getVelocity() < velocityLUT.get(launcherTargetVelocity)) {
-//            launcherPower = 1;
-//        } else if (Objects.equals(launcherState,"firing")){
-//            launcherPower = 0;
-//        }
-//        if (!isIdle) launcher.set(launcherPower);
-//        else {
-//            isIdle = false;
-//            launcherPower = 0;
-//        }
-//        telemetryM.addData("Launcher Power",launcherPower);
-//    }
-
     public double calculateRangeLUT(double input) {
         if (input < 47) {
             transferLoadSpeed = 0;
@@ -686,8 +665,8 @@ public class ILT_Teleop extends LinearOpMode {
             transferLoadSpeed = 0;
             return rangeLUT.get(159);
         } else {
-            if (70 < input && input < 90) transferLoadSpeed = 0.8 * voltageMultiplier;
-            if (90 < input && input < 110) transferLoadSpeed = 0.6 * voltageMultiplier;
+            if (70 < input && input < 90) transferLoadSpeed = 0.85 * voltageMultiplier;
+            else if (90 < input && input < 110) transferLoadSpeed = 0.7 * voltageMultiplier;
             else if (input > 110) transferLoadSpeed = 0.55 * voltageMultiplier;
             else transferLoadSpeed = 1;
             return rangeLUT.get(input);

@@ -1160,6 +1160,7 @@ public class Meet3Auto extends LinearOpMode {
     public void autoStateMachine15() {
         switch (autoState) {
             case -1:
+                follower.setMaxPower(1);
                 break;
             case 0:
                 transferLoadSpeed = 1.0;
