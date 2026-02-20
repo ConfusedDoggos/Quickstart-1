@@ -3,11 +3,11 @@ package org.firstinspires.ftc.teamcode.prototyping;
 import com.seattlesolvers.solverslib.util.InterpLUT;
 
 public class LaunchAngleCalculator {
-    InterpLUT speedLUT = new InterpLUT();
+    InterpLUT velocityLUT = new InterpLUT();
 
     InterpLUT angleLUT = new InterpLUT();
     //height is in meters
-    int height = 3;
+    double height = 3 * 0.0254;
     double minHoodAngle = 35;
     double maxHoodAngle = 60;
 
@@ -17,17 +17,20 @@ public class LaunchAngleCalculator {
         angleLUT.add(0,0);
         angleLUT.add(25, 60);
     }
-    public void createSpeedLUT() {
-        speedLUT.add(0,0);
-        speedLUT.add(2500,800);
-        speedLUT.createLUT();
+
+    private void createSpeedLUT() {
+        velocityLUT.add(0,0);
     }
     public double calcBestAngle(double velocity, double distance) {
 
+        //converts input values (inches) into meters.
+        double d = distance * 0.0254;
+        double v = velocityLUT.get(velocity);
+
         //didn't change much here, just made it easier to read (It does work). distance is meters and angles in radians
-        double sqrt = Math.sqrt(Math.pow(velocity,4) - (9.8 * ((9.8 * Math.pow(distance, 2)) + (2 * height * Math.pow(velocity,2)))));
-        double vel_1 = Math.pow(velocity,2);
-        double divider = 9.8 * distance;
+        double sqrt = Math.sqrt(Math.pow(v,4) - (9.8 * ((9.8 * Math.pow(d, 2)) + (2 * height * Math.pow(v,2)))));
+        double vel_1 = Math.pow(v,2);
+        double divider = 9.8 * d;
         
         double lowAngle = Math.atan((vel_1 - sqrt)/divider);
         double highAngle = Math.atan((vel_1 + sqrt)/divider);
