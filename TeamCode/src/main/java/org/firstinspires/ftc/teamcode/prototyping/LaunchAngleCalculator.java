@@ -21,6 +21,11 @@ public class LaunchAngleCalculator {
     private void createSpeedLUT() {
         velocityLUT.add(0,0);
     }
+
+    public void init(){
+        createAngleLUT();
+        createSpeedLUT();
+    }
     public double calcBestAngle(double velocity, double distance) {
 
         //converts input values (inches) into meters.
