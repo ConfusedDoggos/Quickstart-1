@@ -2,6 +2,7 @@ package org.firstinspires.ftc.teamcode.prototyping.Teleop;
 
 import com.pedropathing.follower.Follower;
 import com.pedropathing.geometry.Pose;
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.util.ElapsedTime;
@@ -17,6 +18,7 @@ import org.firstinspires.ftc.teamcode.prototyping.Teleop.StateMachine;
 import java.util.Objects;
 
 @TeleOp(name="Chud Teleop", group="ILT")
+@Disabled
 public class ILT_Teleop extends LinearOpMode {
 
     // Declare OpMode members.

@@ -200,6 +200,7 @@ public class ILT_Auto extends LinearOpMode {
     public PathChain PGPIntake15C;
     public PathChain PGPtoGate15C;
     public PathChain PGPToScore15C;
+    public PathChain PGPToScore15C2;
     public PathChain ScoreToRamp115C;
     public PathChain ScoreToRamp215C;
     public PathChain IntakeRamp15C;
@@ -295,8 +296,9 @@ public class ILT_Auto extends LinearOpMode {
 
             telemetryUpdate();
             telemetryM.update(telemetry);
+            endPosition = currentPose;
         }
-        endPosition = follower.getPose();
+        endPosition = currentPose;
     }
 
     public void telemetryUpdate() {
@@ -713,13 +715,13 @@ public class ILT_Auto extends LinearOpMode {
     public void updateTeamDependents() {
         if (Objects.equals(team,"blue")){
             goalID = 20;
-            startPose = new Pose(x(30),133,a(270));
+            startPose = new Pose(x(30),134,a(270));
             goalPose = new Pose(0,144,Math.toRadians(135));
             poseResetPose = new Pose(114,7,Math.toRadians(90)); //need to find good one
             aprilTagPose = new Pose(15,130,0);
         } else if (Objects.equals(team,"red")) {
             goalID = 24;
-            startPose = new Pose(x(30),133,a(270));
+            startPose = new Pose(x(30),134,a(270));
             goalPose = new Pose(144,144,Math.toRadians(45));
             poseResetPose = new Pose(30,7,Math.toRadians(90)); //need to find good one
             aprilTagPose = new Pose(129,130,0);
@@ -1377,10 +1379,15 @@ public class ILT_Auto extends LinearOpMode {
             case 5:
                 if (!follower.isBusy()) {
                     follower.followPath(PGPToScore15C);
-                    premoveTurret(x(57),82,Math.toDegrees(a(225)));
-                    autoState = 6;
+                    autoState = -100;
                 }
                 break;
+            case -100:
+                if (!follower.isBusy()) {
+                    premoveTurret(x(57),82,Math.toDegrees(a(225)));
+                    follower.followPath(PGPToScore15C2);
+                    autoState = 6;
+                }
             case 6:
                 if (!follower.isBusy() && follower.getVelocity().getMagnitude() < 2.0) {
                     launchBalls();
@@ -1557,8 +1564,8 @@ public class ILT_Auto extends LinearOpMode {
                 .addPath(
                         new BezierCurve(
                                 new Pose(x(19),60),
-                                new Pose(x(30),70),
-                                new Pose(x(17),70)
+                                new Pose(x(27),70),
+                                new Pose(x(17.75),70)
                         )
                 )
                 .setConstantHeadingInterpolation(a(180))
@@ -1567,14 +1574,24 @@ public class ILT_Auto extends LinearOpMode {
         PGPToScore15C = follower
                 .pathBuilder()
                 .addPath(
-                        new BezierCurve(
+                        new BezierLine(
                                 new Pose(x(17), 70),
-                                new Pose(x(41),70),
-                                new Pose(x(57), 82)
+                                new Pose(x(57),70)
                                 )
                 )
                 .setTangentHeadingInterpolation()
                 .setReversed()
+                .build();
+
+        PGPToScore15C2 = follower
+                .pathBuilder()
+                .addPath(
+                        new BezierLine(
+                                new Pose(x(57),70),
+                                new Pose(x(57),82)
+                        )
+                )
+                .setLinearHeadingInterpolation(a(180),a(225),0.8)
                 .addTemporalCallback(300, preSpinLauncher)
                 .build();
 

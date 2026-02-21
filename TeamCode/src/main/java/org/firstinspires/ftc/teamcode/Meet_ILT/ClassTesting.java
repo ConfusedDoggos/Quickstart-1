@@ -39,6 +39,7 @@ import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.util.ElapsedTime;
 import com.qualcomm.robotcore.util.Range;
 @TeleOp(name="APRIL TAG LOCALIZATION", group="Localization")
+@Disabled
 public class ClassTesting extends LinearOpMode {
 
     // Declare OpMode members.

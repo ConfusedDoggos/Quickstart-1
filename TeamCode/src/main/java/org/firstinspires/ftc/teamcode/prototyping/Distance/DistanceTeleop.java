@@ -41,6 +41,7 @@ import com.qualcomm.robotcore.util.Range;
 import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
 
 @TeleOp(name="Distance Stuff", group="Linear OpMode")
+@Disabled
 public class DistanceTeleop extends LinearOpMode {
 
     // Declare OpMode members.

@@ -135,7 +135,7 @@ public class ILT_Teleop extends LinearOpMode {
 
     //Sensor Variables
     boolean ballIn1, ballIn2, ballIn3, prevBallIn1, prevBallIn2, prevBallIn3;
-    boolean d1Active = true, cActive = true, d3Active = true;
+    boolean sensorsEnabled = true;
 
     private double voltage;
     private double voltageMultiplier;
@@ -353,7 +353,7 @@ public class ILT_Teleop extends LinearOpMode {
 
     public void teleOp() {
         DriverInput();
-        sensorTeleOp();
+        if (sensorsEnabled) sensorTeleOp();
         DTTeleOp();
         turretTeleOp();
         launcherTeleOp();
@@ -417,8 +417,11 @@ public class ILT_Teleop extends LinearOpMode {
             drive.setMaxSpeed(1);
         }
 
-        if ((gamepad2.right_trigger > 0.4 && gamepad2.left_trigger > 0.4) || (gamepad1.right_trigger > 0.4 && gamepad1.left_trigger > 0.4)) {
+        if (gamepad1.right_trigger > 0.4 && gamepad1.left_trigger > 0.4) {
             follower.setPose(poseResetPose);
+        }
+        if (gamepad2.right_trigger > 0.4 && gamepad2.left_trigger > 0.4) {
+            follower.setPose(new Pose(139.5 - poseResetPose.getX(),poseResetPose.getY(),poseResetPose.getHeading()));
         }
         if (gamepad2.right_stick_button && gamepad2.left_bumper) turret.resetEncoder();
 
@@ -452,9 +455,12 @@ public class ILT_Teleop extends LinearOpMode {
 
         //Launcher Section
         if (gamepad2.dpad_up) {
-            launcherState = "testSpeed";
+            turretDriftOffset = 0;
         } else if (gamepad2.dpad_down) {
-            launcherState = "idle";
+            sensorsEnabled = false;
+            ballIn1 = false;
+            ballIn2 = false;
+            ballIn3 = false;
         }
         if (gamepad1.right_bumper || gamepad2.right_bumper) {
             launcherState = "beginLaunchSequence";
@@ -467,9 +473,9 @@ public class ILT_Teleop extends LinearOpMode {
         if (Math.abs(gamepad2.left_stick_x) > 0.1 || gamepad2.left_bumper) {
             turretManualControl = true;
             if (turret.getCurrentPosition() > turretAngleToTicks(-135) && gamepad2.left_stick_x < 0) {
-                turret.set(gamepad2.left_stick_x * .4);
+                turret.set(gamepad2.left_stick_x * .25);
             } else if (turret.getCurrentPosition() < turretAngleToTicks(135) && gamepad2.left_stick_x > 0) {
-                turret.set(gamepad2.left_stick_x * .4);
+                turret.set(gamepad2.left_stick_x * .25);                                                                 //////    '                                                                                                                                     iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiki88888888888888888888888888888888888888888888888888888888888888888888888///////////////////////////');
             } else {
                 turret.set(0);
             }
