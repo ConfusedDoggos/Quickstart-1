@@ -60,7 +60,6 @@ public class Robot {
         launcher2 = new MotorEx(hardwareMap, "launcherMotor2", Motor.GoBILDA.BARE);
         intake = new MotorEx(hardwareMap,"intakeMotor",Motor.GoBILDA.BARE);
         turret = new MotorEx(hardwareMap,"turretMotor",Motor.GoBILDA.RPM_435);
-
         turret.setZeroPowerBehavior(Motor.ZeroPowerBehavior.BRAKE);
         turret.setRunMode(Motor.RunMode.RawPower);
         launcher2.setInverted(true);
