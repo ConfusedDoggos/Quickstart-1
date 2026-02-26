@@ -56,17 +56,17 @@ public class ILT_Auto extends LinearOpMode {
     //April Tag Variables
 
     //Pedropathing Variables
-    private Pose currentPose;
+    public Pose currentPose;
 
-    private final ElapsedTime launchTimer = new ElapsedTime(ElapsedTime.Resolution.SECONDS);
+    public final ElapsedTime launchTimer = new ElapsedTime(ElapsedTime.Resolution.SECONDS);
 
-    private MotorEx fL, fR, bL, bR, launcher1, launcher2, turret, intake;
-    private ServoEx hoodServo;
+    public MotorEx fL, fR, bL, bR, launcher1, launcher2, turret, intake;
+    public ServoEx hoodServo;
     private DistanceSensor distanceSensor1, distanceSensor2;
     private ColorSensor colorSensor;
     private String DTState="drive", intakeState="idle", turretState="idle", launcherState="idle", hoodState="idle";
-    private boolean DTisReady, intakeisReady, turretisReady, launcherisReady;
-    private MotorGroup launcher;
+    public boolean DTisReady, intakeisReady, turretisReady, launcherisReady;
+    public MotorGroup launcher;
     private ElapsedTime teleTimer;
     private MecanumDrive drive;
 
@@ -74,17 +74,17 @@ public class ILT_Auto extends LinearOpMode {
     //Team Dependents
     public static String team = Meet3Auto.team;
     private double goalID = 20;
-    private Pose goalPose;
+    public Pose goalPose;
     private Pose aprilTagPose;
     private Pose poseResetPose;
     private boolean useRealStart = false;
     public static Pose endPose;
     //Lookup Tables
-    private InterpLUT velocityLUT = new InterpLUT(), rangeLUT= new InterpLUT(), hoodLUT = new InterpLUT();
+    public InterpLUT velocityLUT = new InterpLUT(), rangeLUT= new InterpLUT(), hoodLUT = new InterpLUT();
 
     //DT Variables
     private double driveInput, strafeInput, turnInput;
-    private double driveAngleDegrees = 0;
+    public double driveAngleDegrees = 0;
 
     //Launcher Test Variables
     public static double speedOverride = 0;
@@ -94,7 +94,7 @@ public class ILT_Auto extends LinearOpMode {
     public static double kp = 1.5;
     public static double ki = 200;
     public static double kd = 0;
-    private double launcherTargetVelocity;
+    public double launcherTargetVelocity;
     public static double launcherTestSpeed = 0.65;
     public double odoRange = 0;
     public boolean isIdle = true;
@@ -123,9 +123,9 @@ public class ILT_Auto extends LinearOpMode {
     public static double tkD = 0.00005;
     public static double tkSCustom = 0.13;
     public static double errorTotal = 30;
-    private int turretTargetPos;
-    private double angleError;
-    private boolean turretManualControl = false;
+    public int turretTargetPos;
+    public double angleError;
+    public boolean turretManualControl = false;
     private boolean turretAngleLimited = false;
     private double turretDriftOffset = 0;
     private boolean driftAdjustToggle = false;
@@ -137,13 +137,13 @@ public class ILT_Auto extends LinearOpMode {
     private int cyclesSinceUpdate;
 
     //Sensor Variables
-    boolean ballIn1, ballIn2, ballIn3, prevBallIn1, prevBallIn2, prevBallIn3, prev2BallIn1, prev2BallIn2, prev2BallIn3;
+    public boolean ballIn1, ballIn2, ballIn3, prevBallIn1, prevBallIn2, prevBallIn3, prev2BallIn1, prev2BallIn2, prev2BallIn3;
 
     private double voltage;
     private double voltageMultiplier;
     //Timer
     private final ElapsedTime autoTimer = new ElapsedTime(ElapsedTime.Resolution.SECONDS);
-    private final ElapsedTime shootTimeout = new ElapsedTime(ElapsedTime.Resolution.SECONDS);
+    public final ElapsedTime shootTimeout = new ElapsedTime(ElapsedTime.Resolution.SECONDS);
     private final ElapsedTime waitTimer = new ElapsedTime(ElapsedTime.Resolution.SECONDS);
 
     //Panels Editable Variables
