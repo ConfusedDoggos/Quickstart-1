@@ -36,9 +36,15 @@ import com.bylazar.telemetry.TelemetryManager;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.AnalogInput;
+import com.qualcomm.robotcore.hardware.ColorSensor;
+import com.qualcomm.robotcore.hardware.DistanceSensor;
+import com.qualcomm.robotcore.hardware.PwmControl;
 import com.qualcomm.robotcore.util.ElapsedTime;
+import com.seattlesolvers.solverslib.hardware.ServoEx;
 
-@TeleOp(name="Abs Encoder", group="Linear OpMode")
+import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
+
+@TeleOp(name="Sensor Testing + Servo Blocker", group="Linear OpMode")
 @Configurable
 public class AbsoluteEncoder extends LinearOpMode {
 
@@ -55,11 +61,21 @@ public class AbsoluteEncoder extends LinearOpMode {
     double totalAngle = 0;
     double angleOffset = 0;
     double previousAngle = 0;
+    private DistanceSensor distanceSensor1, distanceSensor2;
+    private ColorSensor colorSensor;
+
+    public ServoEx blockerServo;
+    public static double closePosition = 250;
+    public static double openPosition = 315;
     @Override
     public void runOpMode() {
         telemetryM = PanelsTelemetry.INSTANCE.getTelemetry();
         absEncoder = hardwareMap.get(AnalogInput.class,"AbsoluteEncoder");
-
+        blockerServo = new ServoEx(hardwareMap,"blockerServo",0,300);
+        blockerServo.setPwm(new PwmControl.PwmRange(500,2500));
+        distanceSensor1 = hardwareMap.get(DistanceSensor.class, "firstDistanceSensor");
+        distanceSensor2 = hardwareMap.get(DistanceSensor.class, "thirdDistanceSensor");
+        colorSensor = hardwareMap.get(ColorSensor.class, "colorSensor");
         telemetry.addData("Status", "Initialized");
         telemetry.update();
 
@@ -68,6 +84,9 @@ public class AbsoluteEncoder extends LinearOpMode {
         runtime.reset();
         // run until the end of the match (driver presses STOP)
         while (opModeIsActive()) {
+            if (gamepad1.a) blockerServo.set(closePosition);
+            if (gamepad1.b) blockerServo.set(openPosition);
+            if (gamepad1.x) blockerServo.disable();
             outputVoltage = absEncoder.getVoltage();
             outputAngle = outputVoltage / 5 * 360;
             if (Math.abs(previousAngle - outputAngle) > 300) {
@@ -75,6 +94,9 @@ public class AbsoluteEncoder extends LinearOpMode {
                 if (outputAngle > 240) angleOffset -= 360;
             }
             totalAngle = outputAngle + angleOffset;
+            telemetryM.addData("Distance 1",distanceSensor1.getDistance(DistanceUnit.INCH));
+            telemetryM.addData("Color Alpha 2",colorSensor.alpha());
+            telemetryM.addData("Distance 3",distanceSensor2.getDistance(DistanceUnit.INCH));
             telemetryM.addData("Output Voltage",outputVoltage);
             telemetryM.addData("Physical Angle",outputAngle);
             telemetryM.addData("Total Angle", totalAngle);

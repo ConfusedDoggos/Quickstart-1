@@ -28,10 +28,10 @@ public class StateMachine extends ILT_Auto {
         IDLE, UP, DOWN, ADJUSTING
     }
 
-    LauncherStates launcherState = LauncherStates.IDLE;
-    TurretStates turretState = TurretStates.IDLE;
-    IntakeStates intakeState = IntakeStates.IDLE;
-    HoodStates hoodState = HoodStates.IDLE;
+    public LauncherStates launcherState = LauncherStates.IDLE;
+    public TurretStates turretState = TurretStates.IDLE;
+    public IntakeStates intakeState = IntakeStates.IDLE;
+    public HoodStates hoodState = HoodStates.IDLE;
 
     public void StateMachines() {
         IntakeMachine();

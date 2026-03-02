@@ -1,4 +1,4 @@
-package org.firstinspires.ftc.teamcode.Meet_ILT;
+package org.firstinspires.ftc.teamcode.regionals;
 
 import static org.firstinspires.ftc.teamcode.meet2.Meet2Auto.shooterSpeedGap;
 import static org.firstinspires.ftc.teamcode.pedroPathing.Tuning.follower;
@@ -32,19 +32,15 @@ import com.seattlesolvers.solverslib.util.InterpLUT;
 import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
 import org.firstinspires.ftc.teamcode.meet3.Meet3Auto;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
-import org.firstinspires.ftc.teamcode.regionals.StateMachine;
-import org.firstinspires.ftc.vision.VisionPortal;
-import org.firstinspires.ftc.vision.apriltag.AprilTagProcessor;
 
-import java.io.FileNotFoundException;
 import java.util.List;
 import java.util.Objects;
 
 
-@Autonomous(name = "ILT Auto", group = "Autonomous")
+@Autonomous(name = "Regional Auto", group = "Autonomous")
 @Configurable // Panels
 @SuppressWarnings("FieldCanBeLocal") // Stop Android Studio from bugging about variables being predefined
-public class ILT_Auto extends LinearOpMode {
+public class RegionalsAuto extends LinearOpMode {
 
     //Telemetry Manager
 
@@ -160,6 +156,9 @@ public class ILT_Auto extends LinearOpMode {
 
     public double selectedAuto = 15; //default 15 ball
 
+    //Auto Refactor Paths n such
+    public PathChain ParkClose;
+    boolean ParkInitialized = false;
 
 
     //PedroPathing PathChains
@@ -176,7 +175,7 @@ public class ILT_Auto extends LinearOpMode {
     public PathChain RampToScore2;
     public PathChain PPGIntake18;
     public PathChain PPGToScore;
-    public PathChain ScoreToGPP;
+    public PathChain ScoreToGPPClose;
     public PathChain GPPIntake18;
     public PathChain GPPToScore18one;
     public PathChain GPPToScore18two;
@@ -184,7 +183,7 @@ public class ILT_Auto extends LinearOpMode {
     public PathChain startToScore15;
     public PathChain scoreToPGP15;
     public PathChain PGPIntake15;
-    public PathChain PGPToScore15;
+    public PathChain PGPToScoreClose;
     public PathChain ScoreToRamp115;
     public PathChain ScoreToRamp215;
     public PathChain IntakeRamp15;
@@ -193,47 +192,41 @@ public class ILT_Auto extends LinearOpMode {
     public PathChain PPGIntake15;
     public PathChain PPGToScore15;
     public PathChain ScoreToGPP15;
-    public PathChain GPPIntake15;
+    public PathChain GPPIntakeClose;
     public PathChain GPPToScore15one;
     public PathChain Park15;
-    public PathChain startToScore15C;
-    public PathChain scoreToPGP15C;
-    public PathChain PGPIntake15C;
-    public PathChain PGPtoGate15C;
-    public PathChain PGPToScore15C;
-    public PathChain PGPToScore15C2;
-    public PathChain ScoreToRamp115C;
-    public PathChain ScoreToRamp215C;
-    public PathChain IntakeRamp15C;
-    public PathChain RampToScore115C;
+    public PathChain closeStartToScore;
+    public PathChain ScoreToPGPClose;
+    public PathChain PGPIntakeClose;
+    public PathChain PGPToGateClose;
+    public PathChain CompatibleGateScore1;
+    public PathChain CompatibleGateScore2;
+    public PathChain RampToScore;
     public PathChain RampToScore215C;
-    public PathChain PPGIntake15C;
-    public PathChain PPGToScore15C;
+    public PathChain PPGIntakeClose;
+    public PathChain PPGToScoreClose;
     public PathChain ScoreToGPP15C;
     public PathChain GPPIntake15C;
-    public PathChain GPPToScore15oneC;
+    public PathChain GPPToScoreClose;
     public PathChain Park15C;
 
     //Changing variables
     public int autoState = 0;
+    public int segmentState = 0;
 
 
     //Launcher Auto Variables
     public static double launchTime = .85;
     public double preparedLauncherVelocity = 0;
 
-
-    boolean d1Active = true, cActive = true, d3Active = true;
-
     //Turret Auto Variables
     public int preparedTargetPos =0;
 
-    private StateMachine sm;
+
 
 
     @Override
     public void runOpMode() {
-        sm = new StateMachine();
         telemetryM = PanelsTelemetry.INSTANCE.getTelemetry(); // Panels telemetry
         LoopTimer timer = new LoopTimer();
         initMotors(); //Initializes subsystem motors
@@ -275,10 +268,10 @@ public class ILT_Auto extends LinearOpMode {
         updateTeamDependents();
         follower.setStartingPose(startPose);
 
-
-        if (selectedAuto == 15.5) buildPaths15Compatible(); //Initialize all Pedro Paths
-        if (selectedAuto == 15) buildPaths15Compatible();
-        if (selectedAuto == 18) buildPaths18();
+        buildPaths();
+//        if (selectedAuto == 15.5) buildPaths15Compatible(); //Initialize all Pedro Paths
+//        if (selectedAuto == 15) buildPaths15Compatible();
+//        if (selectedAuto == 18) buildPaths18();
 
 
         launchTimer.reset();
@@ -292,12 +285,10 @@ public class ILT_Auto extends LinearOpMode {
             currentPose = follower.getPose();
 
 
-            if (selectedAuto == 15.5) autoStateMachine15Compatible(); //Overall state machine function to simplify code
-            if (selectedAuto == 15) autoStateMachine15();
-            if (selectedAuto == 18) autoStateMachine18();
+//            if (selectedAuto == 15.5) autoStateMachine15Compatible(); //Overall state machine function to simplify code
+//            if (selectedAuto == 15) autoStateMachine15();
+//            if (selectedAuto == 18) autoStateMachine18();
 
-            sm.auto();
-            sm.launcherState = StateMachine.LauncherStates.IDLE;
 
             telemetryUpdate();
             telemetryM.update(telemetry);
@@ -792,7 +783,705 @@ public class ILT_Auto extends LinearOpMode {
         }
     };
 
+    public void Close15Solo() {
+        switch (autoState) {
+            case 0:
+                PreLoadClose();
+                if (segmentState == -1) {
+                    segmentState = 0;
+                    autoState = 1;
+                }
+                break;
+            case 1:
+                PGPClose(false);
+                if (segmentState == -1) {
+                    segmentState = 0;
+                    autoState = 2;
+                }
+                break;
+            case 2:
+                gateClose();
+                if (segmentState == -1) {
+                    segmentState = 0;
+                    autoState = 3;
+                }
+                break;
+            case 3:
+                PPGClose();
+                if (segmentState == -1) {
+                    segmentState = 0;
+                    autoState = 4;
+                }
+                break;
+            case 4:
+                GPPClose();
+                if (segmentState == -1) {
+                    segmentState = 0;
+                    autoState = 5;
+                }
+                break;
+            case 5:
+                parkClose(follower.getPose());
+                if (segmentState == -1) {
+                    segmentState = 0;
+                    autoState = 6;
+                }
+                break;
+            case 6:
+                resetSubsystems();
+                break;
+        }
+    }
 
+    public void Close15Compatible() {
+        switch (autoState) {
+            case 0:
+                PreLoadClose();
+                if (segmentState == -1) {
+                    segmentState = 0;
+                    autoState = 1;
+                }
+                break;
+            case 1:
+                PGPClose(true);
+                if (segmentState == -1) {
+                    segmentState = 0;
+                    autoState = 2;
+                }
+                break;
+            case 2:
+                gateClose();
+                if (segmentState == -1) {
+                    segmentState = 0;
+                    autoState = 3;
+                }
+                break;
+            case 3:
+                gateClose();
+                if (segmentState == -1) {
+                    segmentState = 0;
+                    autoState = 4;
+                }
+                break;
+            case 4:
+                PPGClose();
+                if (segmentState == -1) {
+                    segmentState = 0;
+                    autoState = 5;
+                }
+                break;
+            case 5:
+                parkClose(follower.getPose());
+                if (segmentState == -1) {
+                    segmentState = 0;
+                    autoState = 6;
+                }
+                break;
+            case 6:
+                resetSubsystems();
+                break;
+        }
+    }
+
+    public void Far12Solo() {
+        switch (autoState) {
+            case 0:
+                PreLoadFar();
+                if (segmentState == -1) {
+                    segmentState = 0;
+                    autoState = 1;
+                }
+                break;
+            case 1:
+                GPPFar();
+                if (segmentState == -1) {
+                    segmentState = 0;
+                    autoState = 2;
+                }
+                break;
+            case 2:
+                PGPFar();
+                if (segmentState == -1) {
+                    segmentState = 0;
+                    autoState = 3;
+                }
+                break;
+            case 3:
+                HumanPlayerFar();
+                if (segmentState == -1) {
+                    segmentState = 0;
+                    autoState = 4;
+                }
+                break;
+            case 4:
+                ParkFar(follower.getPose());
+                if (segmentState == -1) {
+                    segmentState = 0;
+                    autoState = 5;
+                }
+                break;
+            case 5:
+                resetSubsystems();
+                break;
+        }
+    }
+
+    public void Far15Compatible() {
+        switch (autoState) {
+            case 0:
+                PreLoadFar();
+                if (segmentState == -1) {
+                    segmentState = 0;
+                    autoState = 1;
+                }
+                break;
+            case 1:
+                GPPFar();
+                if (segmentState == -1) {
+                    segmentState = 0;
+                    autoState = 2;
+                }
+                break;
+            case 2:
+                HumanPlayerFar();
+                if (segmentState == -1) {
+                    segmentState = 0;
+                    autoState = 3;
+                }
+                break;
+            case 3:
+                HumanPlayerBlindFar();
+                if (segmentState == -1) {
+                    segmentState = 0;
+                    autoState = 4;
+                }
+                break;
+            case 4:
+                HumanPlayerBlindFar();
+                if (segmentState == -1) {
+                    segmentState = 0;
+                    autoState = 5;
+                }
+                break;
+            case 5:
+                ParkFar(follower.getPose());
+                if (segmentState == -1) {
+                    segmentState = 0;
+                    autoState = 6;
+                }
+                break;
+            case 6:
+                resetSubsystems();
+                break;
+        }
+    }
+
+    public void PreLoadClose() {
+        switch (segmentState) {
+            case 0:
+                follower.followPath(closeStartToScore);
+                hoodState = "adjusting";
+                premoveTurret(x(45),92,Math.toDegrees(a(289)));
+                segmentState = 1;
+                break;
+            case 1:
+                if (!follower.isBusy() && follower.getVelocity().getMagnitude() < 2.0) {
+                    launchBalls();
+                    segmentState = 2;
+                }
+                break;
+            case 2:
+                if (shootTimeout.seconds() > launchTime) {
+                    resetSubsystems();
+                    segmentState = -1;
+                }
+                break;
+        }
+    }
+
+    public void PPGClose() {
+        switch (segmentState) {
+            case 0:
+                follower.followPath(PPGIntakeClose,intakeMaxPower,true);
+                intakeBalls();
+                segmentState = 1;
+                break;
+            case 1:
+                if (follower.atParametricEnd()) {
+                    resetSubsystems();
+                    premoveTurret(x(51),84,Math.toDegrees(a(180)));
+                    follower.followPath(PPGToScoreClose);
+                    segmentState = 2;
+                }
+                break;
+            case 2:
+                if (!follower.isBusy()  && follower.getVelocity().getMagnitude() < 2.0) {
+                    launchBalls();
+                    segmentState = 3;
+                }
+                break;
+            case 3:
+                if (shootTimeout.seconds() > launchTime) {
+                    resetSubsystems();
+                    segmentState = -1;
+                }
+                break;
+        }
+    }
+
+    public void PGPClose(boolean openGate) {
+        switch (segmentState) {
+            case 0:
+                follower.followPath(ScoreToPGPClose);
+                segmentState = 1;
+                break;
+            case 1:
+                if (!follower.isBusy()) {
+                    follower.followPath(PGPIntakeClose,intakeMaxPower,true);
+                    intakeBalls();
+                    segmentState = 2;
+                }
+                break;
+            case 2:
+                if (!follower.isBusy()) {
+                    resetSubsystems();
+                    if (openGate) {
+                        follower.followPath(PGPToGateClose);
+                        segmentState = 3;
+                    } else {
+                        follower.followPath(PGPToScoreClose);
+                        premoveTurret(x(57),82,Math.toDegrees(a(210)));
+                        segmentState = 5;
+                    }
+                }
+                break;
+            case 3:
+                if (!follower.isBusy()) {
+                    follower.followPath(CompatibleGateScore1);
+                    segmentState = 4;
+                }
+                break;
+            case 4:
+                if (!follower.isBusy()) {
+                    premoveTurret(x(57),82,Math.toDegrees(a(225)));
+                    follower.followPath(CompatibleGateScore2);
+                    segmentState = 5;
+                }
+                break;
+            case 5:
+                if (!follower.isBusy() && follower.getVelocity().getMagnitude() < 2.0) {
+                    launchBalls();
+                    segmentState = 6;
+                }
+                break;
+            case 6:
+                if (shootTimeout.seconds() > launchTime) {
+                    resetSubsystems();
+                    segmentState = -1;
+                }
+                break;
+        }
+    }
+
+    public void gateClose() {
+        switch (segmentState) {
+            case 0:
+                follower.followPath(ScoreToRamp1);
+                segmentState = 1;
+                break;
+            case 1:
+                if (follower.atParametricEnd()) {
+                    follower.followPath(ScoreToRamp2,rampMaxPower,true);
+                    segmentState = 2;
+                }
+                break;
+            case 2:
+                if (follower.isBusy()) {
+                    waitTimer.reset();
+                    intakeBalls();
+                    segmentState = 3;
+                }
+                break;
+            case 3:
+                if (!follower.isBusy() && waitTimer.seconds() > 0.4) {
+                    follower.followPath(IntakeRamp);
+                    segmentState = 4;
+                }
+                break;
+            case 4:
+                if (!follower.isBusy()) {
+                    waitTimer.reset();
+                    segmentState = 5;
+                }
+                break;
+            case 5:
+                if (waitTimer.seconds() > gateWaitTime || isFull) {
+                    resetSubsystems();
+                    premoveTurret(x(55),84,Math.toDegrees(a(217)));
+                    follower.followPath(RampToScore);
+                    segmentState = 6;
+                }
+                break;
+            case 6:
+                if (!follower.isBusy() && follower.getVelocity().getMagnitude() < 2.0) {
+                    launchBalls();
+                    segmentState = 7;
+                }
+                break;
+            case 7:
+                if (shootTimeout.seconds() > launchTime) {
+                    resetSubsystems();
+                    segmentState = -1;
+                }
+        }
+    }
+
+    public void GPPClose() {
+        switch (segmentState) {
+            case 0:
+                follower.followPath(ScoreToGPPClose);
+                segmentState = 1;
+                break;
+            case 1:
+                if (!follower.isBusy()) {
+                    follower.followPath(GPPIntakeClose,intakeMaxPower,true);
+                    intakeBalls();
+                    segmentState = 2;
+                }
+                break;
+            case 2:
+                if (!follower.isBusy()) {
+                    resetSubsystems();
+                    follower.followPath(GPPToScoreClose);
+                    premoveTurret(x(59),79,Math.toDegrees(a(228)));
+                    segmentState = 3;
+                }
+                break;
+            case 3:
+                if (!follower.isBusy() && follower.getVelocity().getMagnitude() < 2.0) {
+                    launchBalls();
+                    segmentState = 4;
+                }
+                break;
+            case 4:
+                if (shootTimeout.seconds() > launchTime) {
+                    resetSubsystems();
+                    segmentState = -1;
+                }
+                break;
+        }
+    }
+
+    public void parkClose(Pose initialPose) {
+        if (!ParkInitialized) {
+            ParkClose = follower.pathBuilder()
+                    .addPath(
+                            new BezierLine(
+                                    new Pose(initialPose.getX(),initialPose.getY(),initialPose.getHeading()),
+                                    new Pose(x(48),70,initialPose.getHeading()))
+                    )
+                    .setConstantHeadingInterpolation(initialPose.getHeading())
+                    .build();
+            ParkInitialized = true;
+        }
+        switch (segmentState) {
+            case 0:
+                follower.followPath(ParkClose);
+                segmentState = 1;
+                break;
+            case 1:
+                if (!follower.isBusy()) {
+                    segmentState = -1;
+                }
+                break;
+        }
+    }
+
+    public void PreLoadFar() {
+        switch (segmentState) {
+            case 0:
+
+                break;
+            case 1:
+
+                break;
+            case 2:
+
+                break;
+            case 3:
+
+                break;
+            case 4:
+
+                break;
+            case 5:
+
+                break;
+        }
+    }
+
+    public void GPPFar() {
+        switch (segmentState) {
+            case 0:
+
+                break;
+            case 1:
+
+                break;
+            case 2:
+
+                break;
+            case 3:
+
+                break;
+            case 4:
+
+                break;
+            case 5:
+
+                break;
+        }
+    }
+
+    public void HumanPlayerFar() {
+        switch (segmentState) {
+            case 0:
+
+                break;
+            case 1:
+
+                break;
+            case 2:
+
+                break;
+            case 3:
+
+                break;
+            case 4:
+
+                break;
+            case 5:
+
+                break;
+        }
+    }
+
+    public void PGPFar() {
+        switch (segmentState) {
+            case 0:
+
+                break;
+            case 1:
+
+                break;
+            case 2:
+
+                break;
+            case 3:
+
+                break;
+            case 4:
+
+                break;
+            case 5:
+
+                break;
+        }
+    }
+
+    public void HumanPlayerBlindFar() {
+        switch (segmentState) {
+            case 0:
+
+                break;
+            case 1:
+
+                break;
+            case 2:
+
+                break;
+            case 3:
+
+                break;
+            case 4:
+
+                break;
+            case 5:
+
+                break;
+        }
+    }
+
+    public void ParkFar(Pose initialPose) {
+        switch (segmentState) {
+            case 0:
+
+                break;
+            case 1:
+
+                break;
+            case 2:
+
+                break;
+            case 3:
+
+                break;
+            case 4:
+
+                break;
+            case 5:
+
+                break;
+        }
+    }
+
+    public void buildPaths() {
+        closeStartToScore = follower
+                .pathBuilder()
+                .addPath(
+                        new BezierLine(new Pose(x(30), 136), new Pose(x(45), 92))
+                )
+                .setTangentHeadingInterpolation()
+                .addTemporalCallback(300, preSpinLauncher)
+                .build();
+
+        PPGIntakeClose = follower
+                .pathBuilder()
+                .addPath(
+                        new BezierLine(new Pose(x(52), 86), new Pose(x(21), 84))
+                )
+                .setTangentHeadingInterpolation()
+                .build();
+
+
+        ScoreToPGPClose = follower
+                .pathBuilder()
+                .addPath(
+                        new BezierLine(new Pose(x(45), 92), new Pose(x(45), 60))
+                )
+                .setLinearHeadingInterpolation(a(289), a(180),0.8)
+                .build();
+
+        PGPIntakeClose = follower
+                .pathBuilder()
+                .addPath(
+                        new BezierLine(new Pose(x(45), 60), new Pose(x(19), 60))
+                )
+                .setTangentHeadingInterpolation()
+                .build();
+
+        PGPToGateClose = follower
+                .pathBuilder()
+                .addPath(
+                        new BezierCurve(
+                                new Pose(x(19),60),
+                                new Pose(x(27),70),
+                                new Pose(x(17.75),70)
+                        )
+                )
+                .setConstantHeadingInterpolation(a(180))
+                .build();
+
+        PGPToScoreClose = follower
+                .pathBuilder()
+                .addPath(
+                        new BezierLine(new Pose(x(19),60), new Pose(x(57),82))
+                )
+                .setTangentHeadingInterpolation()
+                .setReversed()
+                .build();
+
+        CompatibleGateScore1 = follower
+                .pathBuilder()
+                .addPath(
+                        new BezierLine(
+                                new Pose(x(17), 70),
+                                new Pose(x(57),70)
+                        )
+                )
+                .setTangentHeadingInterpolation()
+                .setReversed()
+                .build();
+
+        CompatibleGateScore2 = follower
+                .pathBuilder()
+                .addPath(
+                        new BezierLine(
+                                new Pose(x(57),70),
+                                new Pose(x(57),82)
+                        )
+                )
+                .setLinearHeadingInterpolation(a(180),a(225),0.8)
+                .addTemporalCallback(300, preSpinLauncher)
+                .build();
+
+        ScoreToRamp1 = follower
+                .pathBuilder()
+                .addPath(
+                        new BezierLine(new Pose(x(55), 84), new Pose(x(38), 66))
+                )
+                .setLinearHeadingInterpolation(a(225), a(135),0.8)
+                .setNoDeceleration()
+                .build();
+
+        ScoreToRamp2 = follower
+                .pathBuilder()
+                .addPath(
+                        new BezierLine(
+                                new Pose(x(32), 59.5),
+                                new Pose(x(12.5), 59.5)
+                        )
+                )
+                .setConstantHeadingInterpolation(a(135))
+                .build();
+
+        IntakeRamp = follower
+                .pathBuilder()
+                .addPath(
+                        new BezierLine(
+                                new Pose(x(12.5), 59.5),
+                                new Pose(x(12.5), 52)
+                        )
+                )
+                .setConstantHeadingInterpolation(a(135))
+                .build();
+
+        RampToScore = follower
+                .pathBuilder()
+                .addPath(
+                        new BezierLine(new Pose(x(12.5),52), new Pose(x(55),84))
+                )
+                //.setConstantHeadingInterpolation(a(155))
+                .setTangentHeadingInterpolation()
+                .setReversed()
+                .addTemporalCallback(300, preSpinLauncher)
+                .build();
+
+        ScoreToGPPClose = follower
+                .pathBuilder()
+                .addPath(
+                        new BezierLine(new Pose(x(52),84), new Pose(x(52),36))
+                )
+                .setConstantHeadingInterpolation(a(180))
+                .build();
+
+        GPPIntakeClose = follower
+                .pathBuilder()
+                .addPath(
+                        new BezierLine(new Pose(x(52),36), new Pose(x(20),36))
+                )
+                .setTangentHeadingInterpolation()
+                .build();
+
+        GPPToScoreClose = follower
+                .pathBuilder()
+                .addPath(
+                        new BezierLine(new Pose(x(20),36),new Pose(x(59),79))
+                )
+                .setTangentHeadingInterpolation()
+                .setReversed()
+                .build();
+    }
     public void autoStateMachine18() {
         switch (autoState) {
             case -1:
@@ -968,7 +1657,7 @@ public class ILT_Auto extends LinearOpMode {
             case 22:
                 if (launchTimer.seconds() > launchTime) {
                     resetSubsystems();
-                    follower.followPath(ScoreToGPP);
+                    follower.followPath(ScoreToGPPClose);
                     autoState = 24;
                 }
                 break;
@@ -1138,7 +1827,7 @@ public class ILT_Auto extends LinearOpMode {
                 .setBrakingStrength(0.68)
                 .build();
 
-        ScoreToGPP = follower
+        ScoreToGPPClose = follower
                 .pathBuilder()
                 .addPath(
                         new BezierLine(new Pose(x(49), 84), new Pose(x(48), 65))
@@ -1197,7 +1886,7 @@ public class ILT_Auto extends LinearOpMode {
             case -1:
                 break;
             case 0:
-                follower.followPath(startToScore15C);
+                follower.followPath(closeStartToScore);
                 hoodState = "adjusting";
                 autoState = 1;
                 premoveTurret(x(45),92,Math.toDegrees(a(289)));
@@ -1211,20 +1900,20 @@ public class ILT_Auto extends LinearOpMode {
             case 3:
                 if (shootTimeout.seconds() > launchTime) {
                     resetSubsystems();
-                    follower.followPath(scoreToPGP15C);
+                    follower.followPath(ScoreToPGPClose);
                     autoState = 4;
                 }
                 break;
             case 4:
                 if (!follower.isBusy()) {
-                    follower.followPath(PGPIntake15C,intakeMaxPower15,true);
+                    follower.followPath(PGPIntakeClose,intakeMaxPower15,true);
                     intakeBalls();
                     autoState = 5;
                 }
                 break;
             case 5:
                 if (!follower.isBusy()) {
-                    follower.followPath(PGPToScore15);
+                    follower.followPath(PGPToScoreClose);
                     premoveTurret(x(57),82,Math.toDegrees(a(217)));
                     autoState = 6;
                 }
@@ -1238,13 +1927,13 @@ public class ILT_Auto extends LinearOpMode {
             case 7:
                 if (shootTimeout.seconds() > launchTime15) {
                     resetSubsystems();
-                    follower.followPath(ScoreToRamp115C);
+                    follower.followPath(ScoreToRamp1);
                     autoState = -8;
                 }
                 break;
             case -8:
                 if (follower.atParametricEnd()) {
-                    follower.followPath(ScoreToRamp215C,rampMaxPower15,true);
+                    follower.followPath(ScoreToRamp2,rampMaxPower15,true);
                     autoState = -9;
                 }
                 break;
@@ -1256,7 +1945,7 @@ public class ILT_Auto extends LinearOpMode {
                 break;
             case 8:
                 if (!follower.isBusy() && waitTimer.seconds() > 0.4) {
-                    follower.followPath(IntakeRamp15C);
+                    follower.followPath(IntakeRamp);
                     intakeBalls();
                     autoState = 9;
                 }
@@ -1272,7 +1961,7 @@ public class ILT_Auto extends LinearOpMode {
                 if (waitTimer.seconds() > gateWait15 || isFull) {
                     resetSubsystems();
                     premoveTurret(x(55),84,Math.toDegrees(a(217)));
-                    follower.followPath(RampToScore115C);
+                    follower.followPath(RampToScore);
                     autoState = 11;
                 }
                 break;
@@ -1285,7 +1974,7 @@ public class ILT_Auto extends LinearOpMode {
             case 20:
                 if (shootTimeout.seconds() > launchTime15) {
                     resetSubsystems();
-                    follower.followPath(PPGIntake15C,intakeMaxPower15,true);
+                    follower.followPath(PPGIntakeClose,intakeMaxPower15,true);
                     intakeBalls();
                     autoState = 21;
                 }
@@ -1294,7 +1983,7 @@ public class ILT_Auto extends LinearOpMode {
                 if (follower.atParametricEnd()) {
                     resetSubsystems();
                     premoveTurret(x(51),84,Math.toDegrees(a(180)));
-                    follower.followPath(PPGToScore15C);
+                    follower.followPath(PPGToScoreClose);
                     autoState = 22;
                 }
                 break;
@@ -1306,13 +1995,13 @@ public class ILT_Auto extends LinearOpMode {
                 break;
             case 23:
                 if (!follower.isBusy()) {
-                    follower.followPath(ScoreToGPP);
+                    follower.followPath(ScoreToGPPClose);
                     autoState = 24;
                 }
                 break;
             case 24:
                 if (!follower.isBusy()) {
-                    follower.followPath(GPPIntake15,intakeMaxPower15,true);
+                    follower.followPath(GPPIntakeClose,intakeMaxPower15,true);
                     intakeBalls();
                     autoState = 25;
                 }
@@ -1320,7 +2009,7 @@ public class ILT_Auto extends LinearOpMode {
             case 25:
                 if (!follower.isBusy()) {
                     resetSubsystems();
-                    follower.followPath(GPPToScore15oneC);
+                    follower.followPath(GPPToScoreClose);
                     premoveTurret(59,79,a(228));
                     autoState = 26;
                 }
@@ -1349,7 +2038,7 @@ public class ILT_Auto extends LinearOpMode {
             case -1:
                 break;
             case 0:
-                follower.followPath(startToScore15C);
+                follower.followPath(closeStartToScore);
                 hoodState = "adjusting";
                 autoState = 1;
                 premoveTurret(x(45),92,Math.toDegrees(a(289)));
@@ -1363,34 +2052,34 @@ public class ILT_Auto extends LinearOpMode {
             case 3:
                 if (shootTimeout.seconds() > launchTime) {
                     resetSubsystems();
-                    follower.followPath(scoreToPGP15C);
+                    follower.followPath(ScoreToPGPClose);
                     autoState = 4;
                 }
                 break;
             case 4:
                 if (!follower.isBusy()) {
-                    follower.followPath(PGPIntake15C,intakeMaxPower15,true);
+                    follower.followPath(PGPIntakeClose,intakeMaxPower15,true);
                     intakeBalls();
                     autoState = -10;
                 }
                 break;
             case -10:
                 if (!follower.isBusy()) {
-                    follower.followPath(PGPtoGate15C);
+                    follower.followPath(PGPToGateClose);
                     resetSubsystems();
                     autoState = 5;
                 }
                 break;
             case 5:
                 if (!follower.isBusy()) {
-                    follower.followPath(PGPToScore15C);
+                    follower.followPath(CompatibleGateScore1);
                     autoState = -100;
                 }
                 break;
             case -100:
                 if (!follower.isBusy()) {
                     premoveTurret(x(57),82,Math.toDegrees(a(225)));
-                    follower.followPath(PGPToScore15C2);
+                    follower.followPath(CompatibleGateScore2);
                     autoState = 6;
                 }
             case 6:
@@ -1402,13 +2091,13 @@ public class ILT_Auto extends LinearOpMode {
             case 7:
                 if (shootTimeout.seconds() > launchTime15) {
                     resetSubsystems();
-                    follower.followPath(ScoreToRamp115C);
+                    follower.followPath(ScoreToRamp1);
                     autoState = -8;
                 }
                 break;
             case -8:
                 if (follower.atParametricEnd()) {
-                    follower.followPath(ScoreToRamp215C,rampMaxPower15,true);
+                    follower.followPath(ScoreToRamp2,rampMaxPower15,true);
                     autoState = -9;
                 }
                 break;
@@ -1420,7 +2109,7 @@ public class ILT_Auto extends LinearOpMode {
                 break;
             case 8:
                 if (!follower.isBusy() && waitTimer.seconds() > 0.4) {
-                    follower.followPath(IntakeRamp15C);
+                    follower.followPath(IntakeRamp);
                     intakeBalls();
                     autoState = 9;
                 }
@@ -1436,7 +2125,7 @@ public class ILT_Auto extends LinearOpMode {
                 if (waitTimer.seconds() > gateWait15 || isFull) {
                     resetSubsystems();
                     premoveTurret(x(55),84,Math.toDegrees(a(217)));
-                    follower.followPath(RampToScore115C);
+                    follower.followPath(RampToScore);
                     autoState = 11;
                 }
                 break;
@@ -1455,7 +2144,7 @@ public class ILT_Auto extends LinearOpMode {
                 break;
             case 13:
                 if (follower.atParametricEnd()) {
-                    follower.followPath(ScoreToRamp215C,rampMaxPower15,true);
+                    follower.followPath(ScoreToRamp2,rampMaxPower15,true);
                     autoState = 14;
                 }
                 break;
@@ -1467,7 +2156,7 @@ public class ILT_Auto extends LinearOpMode {
                 break;
             case 15:
                 if (!follower.isBusy() && waitTimer.seconds() > 0.4) {
-                    follower.followPath(IntakeRamp15C);
+                    follower.followPath(IntakeRamp);
                     intakeBalls();
                     autoState = 16;
                 }
@@ -1483,7 +2172,7 @@ public class ILT_Auto extends LinearOpMode {
                 if (waitTimer.seconds() > gateWait15 || isFull) {
                     resetSubsystems();
                     premoveTurret(x(55),84,Math.toDegrees(a(217)));
-                    follower.followPath(RampToScore115C);
+                    follower.followPath(RampToScore);
                     autoState = 19;
                 }
                 break;
@@ -1496,7 +2185,7 @@ public class ILT_Auto extends LinearOpMode {
             case 20:
                 if (shootTimeout.seconds() > launchTime15) {
                     resetSubsystems();
-                    follower.followPath(PPGIntake15C,intakeMaxPower15,true);
+                    follower.followPath(PPGIntakeClose,intakeMaxPower15,true);
                     intakeBalls();
                     autoState = 21;
                 }
@@ -1505,7 +2194,7 @@ public class ILT_Auto extends LinearOpMode {
                 if (follower.atParametricEnd()) {
                     resetSubsystems();
                     premoveTurret(x(51),84,Math.toDegrees(a(180)));
-                    follower.followPath(PPGToScore15C);
+                    follower.followPath(PPGToScoreClose);
                     autoState = 22;
                 }
                 break;
@@ -1530,7 +2219,7 @@ public class ILT_Auto extends LinearOpMode {
     }
 
     public void buildPaths15Compatible() {
-        startToScore15C = follower
+        closeStartToScore = follower
                 .pathBuilder()
                 .addPath(
                         new BezierLine(new Pose(x(30), 136), new Pose(x(45), 92))
@@ -1539,7 +2228,7 @@ public class ILT_Auto extends LinearOpMode {
                 .addTemporalCallback(300, preSpinLauncher)
                 .build();
 
-        scoreToPGP15C = follower
+        ScoreToPGPClose = follower
                 .pathBuilder()
                 .addPath(
                         new BezierLine(new Pose(x(45), 92), new Pose(x(45), 60))
@@ -1547,7 +2236,7 @@ public class ILT_Auto extends LinearOpMode {
                 .setLinearHeadingInterpolation(a(289), a(180),0.8)
                 .build();
 
-        PGPIntake15C = follower
+        PGPIntakeClose = follower
                 .pathBuilder()
                 .addPath(
                         new BezierLine(new Pose(x(45), 60), new Pose(x(19), 60))
@@ -1555,7 +2244,7 @@ public class ILT_Auto extends LinearOpMode {
                 .setTangentHeadingInterpolation()
                 .build();
 
-        PGPToScore15 = follower
+        PGPToScoreClose = follower
                 .pathBuilder()
                 .addPath(
                         new BezierLine(new Pose(x(19),60), new Pose(x(57),82))
@@ -1564,7 +2253,7 @@ public class ILT_Auto extends LinearOpMode {
                 .setReversed()
                 .build();
 
-        PGPtoGate15C = follower
+        PGPToGateClose = follower
                 .pathBuilder()
                 .addPath(
                         new BezierCurve(
@@ -1576,19 +2265,19 @@ public class ILT_Auto extends LinearOpMode {
                 .setConstantHeadingInterpolation(a(180))
                 .build();
 
-        PGPToScore15C = follower
+        CompatibleGateScore1 = follower
                 .pathBuilder()
                 .addPath(
                         new BezierLine(
                                 new Pose(x(17), 70),
                                 new Pose(x(57),70)
-                                )
+                        )
                 )
                 .setTangentHeadingInterpolation()
                 .setReversed()
                 .build();
 
-        PGPToScore15C2 = follower
+        CompatibleGateScore2 = follower
                 .pathBuilder()
                 .addPath(
                         new BezierLine(
@@ -1600,12 +2289,12 @@ public class ILT_Auto extends LinearOpMode {
                 .addTemporalCallback(300, preSpinLauncher)
                 .build();
 
-        ScoreToRamp115C = follower
+        ScoreToRamp1 = follower
                 .pathBuilder()
                 .addPath(
                         new BezierLine(new Pose(x(55), 84), new Pose(x(38), 66))
                 )
-                .setLinearHeadingInterpolation(a(214), a(135),0.8)
+                .setLinearHeadingInterpolation(a(225), a(135),0.8)
                 .setNoDeceleration()
                 .build();
 
@@ -1618,7 +2307,7 @@ public class ILT_Auto extends LinearOpMode {
                 .setNoDeceleration()
                 .build();
 
-        ScoreToRamp215C = follower
+        ScoreToRamp2 = follower
                 .pathBuilder()
                 .addPath(
                         new BezierLine(
@@ -1629,7 +2318,7 @@ public class ILT_Auto extends LinearOpMode {
                 .setConstantHeadingInterpolation(a(135))
                 .build();
 
-        IntakeRamp15C = follower
+        IntakeRamp = follower
                 .pathBuilder()
                 .addPath(
                         new BezierLine(
@@ -1640,7 +2329,7 @@ public class ILT_Auto extends LinearOpMode {
                 .setConstantHeadingInterpolation(a(135))
                 .build();
 
-        RampToScore115C = follower
+        RampToScore = follower
                 .pathBuilder()
                 .addPath(
                         new BezierLine(new Pose(x(12.5),52), new Pose(x(55),84))
@@ -1651,7 +2340,7 @@ public class ILT_Auto extends LinearOpMode {
                 .addTemporalCallback(300, preSpinLauncher)
                 .build();
 
-        PPGIntake15C = follower
+        PPGIntakeClose = follower
                 .pathBuilder()
                 .addPath(
                         new BezierLine(new Pose(x(52), 86), new Pose(x(21), 84))
@@ -1659,17 +2348,14 @@ public class ILT_Auto extends LinearOpMode {
                 .setTangentHeadingInterpolation()
                 .build();
 
-        PPGToScore15C = follower
+        PPGIntakeClose = follower
                 .pathBuilder()
                 .addPath(
-                        new BezierLine(new Pose(x(21), 84), new Pose(x(52), 84))
+                        new BezierLine(new Pose(x(52), 86), new Pose(x(21), 84))
                 )
                 .setTangentHeadingInterpolation()
-                .setReversed()
-                .addTemporalCallback(300, preSpinLauncher)
                 .build();
-
-        ScoreToGPP = follower
+        ScoreToGPPClose = follower
                 .pathBuilder()
                 .addPath(
                         new BezierLine(new Pose(x(52),84), new Pose(x(52),36))
@@ -1685,10 +2371,10 @@ public class ILT_Auto extends LinearOpMode {
                 .setTangentHeadingInterpolation()
                 .build();
 
-        GPPToScore15oneC = follower
+        GPPToScoreClose = follower
                 .pathBuilder()
                 .addPath(
-                        new BezierLine(new Pose(x(20),84),new Pose(x(59),79))
+                        new BezierLine(new Pose(x(20),36),new Pose(x(59),79))
                 )
                 .setTangentHeadingInterpolation()
                 .setReversed()
