@@ -106,7 +106,7 @@ public class ILT_Teleop extends LinearOpMode {
     public static double hoodOffset = -1.5;
 
     //Blocker Variables
-    public double closedAngle = 250;
+    public double closedAngle = 240;
     public double openAngle = 315;
 
     //Intake Variables

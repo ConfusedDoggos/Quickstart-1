@@ -15,6 +15,7 @@ import com.pedropathing.paths.PathChain;
 import com.qualcomm.hardware.lynx.LynxModule;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
+import com.qualcomm.robotcore.hardware.AnalogInput;
 import com.qualcomm.robotcore.hardware.ColorSensor;
 import com.qualcomm.robotcore.hardware.DistanceSensor;
 import com.qualcomm.robotcore.hardware.PwmControl;
@@ -56,12 +57,14 @@ public class RegionalsAuto extends LinearOpMode {
     public Pose currentPose;
 
     public final ElapsedTime launchTimer = new ElapsedTime(ElapsedTime.Resolution.SECONDS);
+    private final ElapsedTime intakeTimer = new ElapsedTime(ElapsedTime.Resolution.SECONDS);
+    private final ElapsedTime launchPrepTimer = new ElapsedTime(ElapsedTime.Resolution.SECONDS);
 
     public MotorEx fL, fR, bL, bR, launcher1, launcher2, turret, intake;
-    public ServoEx hoodServo;
+    public ServoEx hoodServo, blockerServo;
     private DistanceSensor distanceSensor1, distanceSensor2;
     private ColorSensor colorSensor;
-    private String DTState="drive", intakeState="idle", turretState="idle", launcherState="idle", hoodState="idle";
+    private String DTState = "drive", intakeState = "idle", turretState = "idle", launcherState = "idle", hoodState = "idle";
     public boolean DTisReady, intakeisReady, turretisReady, launcherisReady;
     public MotorGroup launcher;
     private ElapsedTime teleTimer;
@@ -77,7 +80,7 @@ public class RegionalsAuto extends LinearOpMode {
     private boolean useRealStart = false;
     public static Pose endPose;
     //Lookup Tables
-    public InterpLUT velocityLUT = new InterpLUT(), rangeLUT= new InterpLUT(), hoodLUT = new InterpLUT();
+    public InterpLUT velocityLUT = new InterpLUT(), rangeLUT = new InterpLUT(), hoodLUT = new InterpLUT();
 
     //DT Variables
     private double driveInput, strafeInput, turnInput;
@@ -120,7 +123,7 @@ public class RegionalsAuto extends LinearOpMode {
     public static double tkD = 0.00005;
     public static double tkSCustom = 0.13;
     public static double errorTotal = 30;
-    public int turretTargetPos;
+    public double turretTargetPos;
     public double angleError;
     public boolean turretManualControl = false;
     private boolean turretAngleLimited = false;
@@ -135,10 +138,24 @@ public class RegionalsAuto extends LinearOpMode {
 
     //Sensor Variables
     public boolean ballIn1, ballIn2, ballIn3, prevBallIn1, prevBallIn2, prevBallIn3, prev2BallIn1, prev2BallIn2, prev2BallIn3;
+    boolean sensorsEnabled = true;
 
     private double voltage;
     private double voltageMultiplier;
     //Timer
+
+    AnalogInput absEncoder;
+    public static double zeroPositionOffset = -173;
+    double outputVoltage = 0;
+    double outputAngle = 0;
+    double totalRawAngle = 0;
+    double turnCounter = 0;
+    double trueTurretAngle = 0;
+    double previousAngle = 0;
+    double previousRawAngle = 0;
+
+    double hoodCompensationAngle = 0;
+
     private final ElapsedTime autoTimer = new ElapsedTime(ElapsedTime.Resolution.SECONDS);
     public final ElapsedTime shootTimeout = new ElapsedTime(ElapsedTime.Resolution.SECONDS);
     private final ElapsedTime waitTimer = new ElapsedTime(ElapsedTime.Resolution.SECONDS);
@@ -152,13 +169,14 @@ public class RegionalsAuto extends LinearOpMode {
     public static double intakeMaxPower15 = 0.9;
     public static double rampMaxPower15 = 1.0;
     public static double farLaunchTime = .8;
-    public static Pose endPosition = new Pose(0,0,0);
+    public static Pose endPosition = new Pose(0, 0, 0);
 
-    public double selectedAuto = 15; //default 15 ball
 
     //Auto Refactor Paths n such
     public PathChain ParkClose;
     boolean ParkInitialized = false;
+
+    public static Pose scorePose;
 
 
     //PedroPathing PathChains
@@ -220,9 +238,16 @@ public class RegionalsAuto extends LinearOpMode {
     public double preparedLauncherVelocity = 0;
 
     //Turret Auto Variables
-    public int preparedTargetPos =0;
+    public double preparedTargetPos = 0;
 
+    public enum selectedAuto {
+        Close15Compatible,
+        Close15Solo,
+        Far15Compatible,
+        Far15Solo
+    }
 
+    public selectedAuto auto;
 
 
     @Override
@@ -236,7 +261,7 @@ public class RegionalsAuto extends LinearOpMode {
         voltage = voltageSensor.getVoltage();
 
         //voltageMultiplier = ((voltage-12)/1.5);
-        voltageMultiplier = 1-((13.0-voltage)/13.0)*2;
+        voltageMultiplier = 1 - ((13.0 - voltage) / 13.0) * 2;
         if (voltageMultiplier > 1) {
             voltageMultiplier = 1;
         }
@@ -248,30 +273,29 @@ public class RegionalsAuto extends LinearOpMode {
         hubs.forEach(hub -> hub.setBulkCachingMode(LynxModule.BulkCachingMode.MANUAL)); //Bulk read to reduce loop time
 
         //Initialize PP Follower
-        follower= Constants.createFollower(hardwareMap);
+        follower = Constants.createFollower(hardwareMap);
         while (opModeInInit()) {
             telemetry.addLine("Driver: Press left stick for blue team and right stick for red team");
-            telemetry.addLine("A for 12 ball, X for 15 ball, B for 18 ball, Y for far zone (9)");
+            telemetry.addLine("A = Close Solo. B = Far Solo. X = Close Compatible. Y = Far Compatible");
             telemetry.addData("Team Selected:", team);
-            telemetry.addData("Auto Selected:",selectedAuto);
-            if (selectedAuto == 15.5) telemetry.addLine("THIS IS ALLIANCE COMPATIBLE");
+            telemetry.addData("Auto Selected:", auto);
+            if (auto == selectedAuto.Close15Compatible || auto == selectedAuto.Far15Compatible)
+                telemetry.addLine("THIS IS ALLIANCE COMPATIBLE");
             telemetry.update();
             if (gamepad1.left_stick_button) {
                 team = "blue";
             } else if (gamepad1.right_stick_button) {
                 team = "red";
             }
-            if (gamepad1.a) selectedAuto = 15.5;
-            else if (gamepad1.x) selectedAuto = 15;
-            else if (gamepad1.b) selectedAuto = 18;
+            if (gamepad1.a) auto = selectedAuto.Close15Solo;
+            if (gamepad1.x) auto = selectedAuto.Close15Compatible;
+            if (gamepad1.b) auto = selectedAuto.Far15Solo;
+            if (gamepad1.y) auto = selectedAuto.Far15Compatible;
         }
         updateTeamDependents();
         follower.setStartingPose(startPose);
 
         buildPaths();
-//        if (selectedAuto == 15.5) buildPaths15Compatible(); //Initialize all Pedro Paths
-//        if (selectedAuto == 15) buildPaths15Compatible();
-//        if (selectedAuto == 18) buildPaths18();
 
 
         launchTimer.reset();
@@ -280,15 +304,18 @@ public class RegionalsAuto extends LinearOpMode {
 
             hubs.forEach(LynxModule::clearBulkCache); //Bulk reading
 
+
             //Update Pedro follower and Panels
             follower.update();
             currentPose = follower.getPose();
 
+            if (auto == selectedAuto.Close15Compatible) Close15Compatible();
+            if (auto == selectedAuto.Close15Solo) Close15Solo();
+            if (auto == selectedAuto.Far15Compatible) Far15Compatible();
+            if (auto == selectedAuto.Far15Solo) Far15Solo();
 
-//            if (selectedAuto == 15.5) autoStateMachine15Compatible(); //Overall state machine function to simplify code
-//            if (selectedAuto == 15) autoStateMachine15();
-//            if (selectedAuto == 18) autoStateMachine18();
 
+            teleop();
 
             telemetryUpdate();
             telemetryM.update(telemetry);
@@ -299,19 +326,19 @@ public class RegionalsAuto extends LinearOpMode {
 
     public void telemetryUpdate() {
         telemetryM.addLine("Robot Position");
-        telemetryM.addData("X",currentPose.getX());
-        telemetryM.addData("Y",currentPose.getY());
-        telemetryM.addData("Heading",Math.toDegrees(currentPose.getHeading()));
-        telemetryM.addData("Goal Distance",odoRange);
+        telemetryM.addData("X", currentPose.getX());
+        telemetryM.addData("Y", currentPose.getY());
+        telemetryM.addData("Heading", Math.toDegrees(currentPose.getHeading()));
+        telemetryM.addData("Goal Distance", odoRange);
         telemetryM.addLine("Launcher Info");
-        telemetryM.addData("Launcher Velocity",launcher.getVelocity());
-        telemetryM.addData("Launcher Target",velocityLUT.get(launcherTargetVelocity));
-        telemetryM.addData("Launcher Power",launcher.get());
+        telemetryM.addData("Launcher Velocity", launcher.getVelocity());
+        telemetryM.addData("Launcher Target", velocityLUT.get(launcherTargetVelocity));
+        telemetryM.addData("Launcher Power", launcher.get());
         telemetryM.addLine("Turret Info");
-        telemetryM.addData("Turret Target",turretTargetPos);
-        telemetryM.addData("Turret Pos",turret.getCurrentPosition());
-        telemetryM.addData("Turret Angle",turret.getCurrentPosition() * 360/1076.6);
-        telemetryM.addData("Turret Motor Power",turret.get());
+        telemetryM.addData("Turret Target", turretTargetPos);
+        telemetryM.addData("Turret Pos", turret.getCurrentPosition());
+        telemetryM.addData("Turret Angle", turret.getCurrentPosition() * 360 / 1076.6);
+        telemetryM.addData("Turret Motor Power", turret.get());
         //telemetryM.addData("Distance",testDistanceSensor.getDistance(DistanceUnit.INCH));
     }
 
@@ -322,14 +349,15 @@ public class RegionalsAuto extends LinearOpMode {
         bR = new MotorEx(hardwareMap, "bR", Motor.GoBILDA.RPM_312);
         launcher1 = new MotorEx(hardwareMap, "launcherMotor1", Motor.GoBILDA.BARE);
         launcher2 = new MotorEx(hardwareMap, "launcherMotor2", Motor.GoBILDA.BARE);
-        intake = new MotorEx(hardwareMap,"intakeMotor",Motor.GoBILDA.BARE);
-        turret = new MotorEx(hardwareMap,"turretMotor",Motor.GoBILDA.RPM_435);
-        turret.resetEncoder();
+        intake = new MotorEx(hardwareMap, "intakeMotor", Motor.GoBILDA.BARE);
+        turret = new MotorEx(hardwareMap, "turretMotor", Motor.GoBILDA.RPM_435);
+        //turret.resetEncoder();
         turret.setZeroPowerBehavior(Motor.ZeroPowerBehavior.BRAKE);
         turret.setRunMode(Motor.RunMode.RawPower);
+        turret.setCachingTolerance(0.01);
         launcher2.setInverted(true);
-        launcher1.setVeloCoefficients(kp,ki,kd);
-        launcher2.setVeloCoefficients(kp,ki,kd);
+        launcher1.setVeloCoefficients(kp, ki, kd);
+        launcher2.setVeloCoefficients(kp, ki, kd);
         //launcher1.setFeedforwardCoefficients(ks,kv);
         //launcher2.setFeedforwardCoefficients(ks,kv);
         launcher1.setRunMode(Motor.RunMode.VelocityControl);
@@ -337,14 +365,18 @@ public class RegionalsAuto extends LinearOpMode {
         drive = new MecanumDrive(fL, fR, bL, bR);
         drive.setRightSideInverted(false);
         turretPIDF = new PIDFController(tkP, tkI, tkD, 0);
-        turretPIDF.setIntegrationBounds(-errorTotal,errorTotal);
+        turretPIDF.setIntegrationBounds(-errorTotal, errorTotal);
+        //launcherPID = new PIDController(kp,ki,kd);
         launcher = new MotorGroup(launcher1, launcher2);
         distanceSensor1 = hardwareMap.get(DistanceSensor.class, "firstDistanceSensor");
         distanceSensor2 = hardwareMap.get(DistanceSensor.class, "thirdDistanceSensor");
         colorSensor = hardwareMap.get(ColorSensor.class, "colorSensor");
-        hoodServo = new ServoEx(hardwareMap,"hoodServo",0, 300);
-        hoodServo.setPwm(new PwmControl.PwmRange(500,2500));
+        hoodServo = new ServoEx(hardwareMap, "hoodServo", 0, 300);
+        hoodServo.setPwm(new PwmControl.PwmRange(500, 2500));
         hoodServo.setInverted(true);
+        blockerServo = new ServoEx(hardwareMap, "blockerServo", 0, 300);
+        blockerServo.setPwm(new PwmControl.PwmRange(500, 2500));
+        absEncoder = hardwareMap.get(AnalogInput.class, "AbsoluteEncoder");
     }
 
     public void createLUTs() {
@@ -352,77 +384,74 @@ public class RegionalsAuto extends LinearOpMode {
 
         //Add values (obtained empirically)
         //Input is distance, output is shooter velocity
-//        rangeLUT.add(20, 0.43);
-//        rangeLUT.add(48, 0.44);
-//        rangeLUT.add(55, 0.45);
-//        rangeLUT.add(65.7, 0.48);
-//        rangeLUT.add(75, 0.5);
-//        rangeLUT.add(85, 0.54);
-//        rangeLUT.add(100, .57);
-//        rangeLUT.add(110, 0.6);
-//        rangeLUT.add(115, 0.62);
-//        rangeLUT.add(123, 0.69);
-//        rangeLUT.add(130, 0.69);
-//        rangeLUT.add(140, 0.76);
-//        rangeLUT.add(160, 0.81);
-        if (speedOverride == 0) {
-            rangeLUT.add(47,0.4);
-            rangeLUT.add(55,0.41);
-            rangeLUT.add(65,0.44);
-            rangeLUT.add(75,0.47);
-            rangeLUT.add(85,.47);
-            rangeLUT.add(95,0.5);
-            rangeLUT.add(106,0.52);
-            rangeLUT.add(126,.56);
-            rangeLUT.add(147,.6);
-            rangeLUT.add(160,0.64);
-        } else {
-            rangeLUT.add(20,speedOverride);
-            rangeLUT.add(160,speedOverride);
-        }
+        rangeLUT.add(47, 0.4);
+        rangeLUT.add(55, 0.41);
+        rangeLUT.add(65, 0.44);
+        rangeLUT.add(75, 0.47);
+        rangeLUT.add(85, .485);
+        rangeLUT.add(95, 0.5);
+        rangeLUT.add(106, 0.52);
+        rangeLUT.add(126, .56);
+        rangeLUT.add(147, .6);
+        rangeLUT.add(160, 0.64);
+
         rangeLUT.createLUT();
 
-        velocityLUT.add(-1.001,2500);
-        velocityLUT.add(-0.8,2000);
-        velocityLUT.add(-0.6,1500);
-        velocityLUT.add(-.4,1000);
-        velocityLUT.add(-.2,500);
-        velocityLUT.add(0,0);
-        velocityLUT.add(0.2,500);
-        velocityLUT.add(0.4,1000);
-        velocityLUT.add(0.6,1500);
-        velocityLUT.add(0.8,2000);
-        velocityLUT.add(1.001,2500);
+        velocityLUT.add(-1.001, 2500);
+        velocityLUT.add(-0.8, 2000);
+        velocityLUT.add(-0.6, 1500);
+        velocityLUT.add(-.4, 1000);
+        velocityLUT.add(-.2, 500);
+        velocityLUT.add(0, 0);
+        velocityLUT.add(0.2, 500);
+        velocityLUT.add(0.4, 1000);
+        velocityLUT.add(0.6, 1500);
+        velocityLUT.add(0.8, 2000);
+        velocityLUT.add(1.001, 2500);
         velocityLUT.createLUT();
 
-        if (angleOverride == 0) {
-            hoodLUT.add(0, 33);
-            hoodLUT.add(20, 33);
-            hoodLUT.add(47,33);
-            hoodLUT.add(55,33);
-            hoodLUT.add(65,35);
-            hoodLUT.add(75,36);
-            hoodLUT.add(85,39);
-            hoodLUT.add(95,40);
-            hoodLUT.add(106,42);
-            hoodLUT.add(126, 45);
-            hoodLUT.add(147, 48);
-            hoodLUT.add(160,50);
-        } else {
-            hoodLUT.add(0,angleOverride);
-            hoodLUT.add(160,angleOverride);
-        }
+
+        hoodLUT.add(0, 33);
+        hoodLUT.add(20, 33);
+        hoodLUT.add(47, 33);
+        hoodLUT.add(55, 33);
+        hoodLUT.add(65, 35);
+        hoodLUT.add(75, 36);
+        hoodLUT.add(85, 39);
+        hoodLUT.add(95, 40);
+        hoodLUT.add(106, 42);
+        hoodLUT.add(126, 44);
+        hoodLUT.add(147, 47);
+        hoodLUT.add(160, 48.5);
+
         hoodLUT.createLUT();
     }
 
-    public void auto() {
-        sensorTeleOp();
+    public void teleop() {
+        if (sensorsEnabled) sensorTeleOp();
+        absEncoderTeleOp();
         DTTeleOp();
         turretTeleOp();
         launcherTeleOp();
         intakeTeleOp();
         hoodTeleOp();
     }
+
+    public void absEncoderTeleOp() {
+        outputVoltage = absEncoder.getVoltage();
+        outputAngle = outputVoltage / 5 * 360;
+        if (Math.abs(outputAngle - previousAngle) < 180) {
+        } else if (outputAngle < previousAngle) turnCounter += 1;
+        else if (outputAngle > previousAngle) turnCounter -= 1;
+        totalRawAngle = outputAngle + turnCounter * 360;
+        trueTurretAngle = ((totalRawAngle + zeroPositionOffset) / 2);
+        previousAngle = outputAngle;
+        previousRawAngle = totalRawAngle;
+    }
+
+//    public double calculateHoodOffset(double velocityError) {
+//        return Math.abs(velocityError) * angleVelocityMultiplier;
+//    }
 
     public void hoodTeleOp() {
         switch (hoodState) {
@@ -438,12 +467,12 @@ public class RegionalsAuto extends LinearOpMode {
                 hoodServo.set(hoodToServoAngle(hoodTargetAngle));
                 break;
             case "adjusting":
-                hoodTargetAngle = hoodToServoAngle(angleLUT(odoRange));
+                hoodTargetAngle = hoodToServoAngle(angleLUT(odoRange)) + hoodCompensationAngle;
                 hoodServo.set(hoodTargetAngle);
                 break;
         }
-        telemetryM.addData("Hood Angle",hoodTargetAngle);
-        telemetryM.addData("Servo Angle",hoodServo.get());
+        telemetryM.addData("Hood Angle", hoodTargetAngle);
+        telemetryM.addData("Servo Angle", hoodServo.get());
     }
 
     public double servoToHoodAngle(double servoInput) {
@@ -451,28 +480,28 @@ public class RegionalsAuto extends LinearOpMode {
     }
 
     public double hoodToServoAngle(double hoodAngle) {
-        return (hoodAngle-minHoodAngle - hoodOffset) * 121 / 13;
+        return (hoodAngle - minHoodAngle - hoodOffset) * 121 / 13;
     }
 
     public double angleLUT(double range) {
         if (range > 20 && range < 160) return hoodLUT.get(range);
-        else return 45;
+        else return 50;
     }
 
     public void sensorTeleOp() {
-        if(cyclesSinceUpdate == 3) {
+        if (cyclesSinceUpdate == 9) {
+            cyclesSinceUpdate = 0;
             distance1 = distanceSensor1.getDistance(DistanceUnit.INCH);
             prevBallIn1 = ballIn1;
             ballIn1 = distance1 < 4;
         }
-        if(cyclesSinceUpdate == 6) {
+        if (cyclesSinceUpdate == 6) {
             colorAlpha = colorSensor.alpha();
             prevBallIn2 = ballIn2;
             ballIn2 = colorAlpha > 70;
         }
-        if(cyclesSinceUpdate == 9) {
+        if (cyclesSinceUpdate == 3) {
             distance2 = distanceSensor2.getDistance(DistanceUnit.INCH);
-            cyclesSinceUpdate = 0;
             prevBallIn3 = ballIn3;
             ballIn3 = distance2 < 4;
         }
@@ -487,45 +516,59 @@ public class RegionalsAuto extends LinearOpMode {
 
 
     public void DTTeleOp() {
-        switch (DTState){
+
+        switch (DTState) {
             case "idle":
                 DTisReady = true;
                 break;
             case "drive":
-                break;
+                if (Math.abs(driveInput) < .1) {
+                    driveInput = 0;
+                }
+                if (Math.abs(strafeInput) < .1) {
+                    strafeInput = 0;
+                }
         }
     }
 
     public void intakeTeleOp() {
-        switch (intakeState){
+        switch (intakeState) {
             case "idle":
                 intakeisReady = true;
                 intake.stopMotor();
-                shootTimeout.reset();
+                blockerServo.set(openAngle);
                 break;
             case "firing":
 //                if (Math.abs(intake.getVelocity()) < 300) intake.set(1.0);
 //                else intake.set(transferLoadSpeed);
                 intake.set(transferLoadSpeed);
+                blockerServo.set(openAngle);
                 break;
+            case "beginIntaking":
+                intakeTimer.reset();
+                blockerServo.set(closedAngle);
+                intakeState = "intaking";
             case "intaking":
-                intake.set(intakePickupSpeed);
-                if (ballIn1 && ballIn2 && ballIn3 && prevBallIn1 && prevBallIn2 && prevBallIn3 && prev2BallIn1 && prev2BallIn2 && prev2BallIn3) {
-                    intakeState = "idle";
-                    //launcherState = "preparing";
-                    turretState = "tracking";
+                if ((!ballIn1 && !ballIn2 && !ballIn3 && sensorsEnabled) || intakeTimer.seconds() > 0.3) {
+                    intake.set(intakePickupSpeed);
+                    blockerServo.set(closedAngle);
+                    if (ballIn1 && ballIn2 && ballIn3 && prevBallIn1 && prevBallIn2 && prevBallIn3) {
+                        intakeState = "idle";
+                        //launcherState = "preparing";
+                        turretState = "tracking";
+                    }
                 }
                 break;
             case "rejecting":
                 intake.set(intakeRejectSpeed);
-                shootTimeout.reset();
+                blockerServo.set(openAngle);
                 break;
         }
     }
 
     public void turretTeleOp() {
 
-        switch (turretState){
+        switch (turretState) {
             case "idle":
                 turretisReady = true;
                 break;
@@ -547,7 +590,6 @@ public class RegionalsAuto extends LinearOpMode {
                 }
                 break;
             case "preparing":
-                turretTargetPos = preparedTargetPos;
                 break;
         }
         if (!turretManualControl) turretControlLoop();
@@ -558,12 +600,12 @@ public class RegionalsAuto extends LinearOpMode {
         double botY = currentPose.getY();
         double goalX = goalPose.getX();
         double goalY = goalPose.getY();
-        switch (launcherState){
+        switch (launcherState) {
             case "idle":
                 launcherisReady = true;
                 isIdle = true;
                 launcher.stopMotor();
-                odoRange = Math.hypot(goalX-botX,goalY-botY);
+                odoRange = Math.hypot(goalX - botX, goalY - botY);
                 break;
             case "testSpeed":
                 launcherTargetVelocity = launcherTestSpeed;
@@ -601,19 +643,30 @@ public class RegionalsAuto extends LinearOpMode {
                 if (launcher.getVelocity() > velocityLUT.get(launcherTargetVelocity)) {
                     launcher.stopMotor();
                 } else launcher.set(1);
-                if (Objects.equals(turretState,"aiming") || (follower.getVelocity().getMagnitude() > 6 && Math.abs(follower.getAngularVelocity()) < 0.5)) {
+                if (Objects.equals(turretState, "aiming") ||
+                        (follower.getVelocity().getMagnitude() > 6 && Math.abs(follower.getAngularVelocity()) < 0.5)) {
                     intakeState = "idle";
                     launcherState = "acc_ready";
                 }
+//                if (Math.abs(launcher.getVelocity()) > Math.abs(velocityLUT.get(launcherTargetVelocity)) - 35 && odoRange > 100) {
+//                    intakeState = "idle";
+//                    launcherState = "aiming";
+//                }
+                break;
+            case "prepare":
+                launchPrepTimer.reset();
+                launcherState = "preparing";
                 break;
             case "preparing":
-                launcherSpinUp();
-                launcher.set(launcherTargetVelocity);
+                if (launchPrepTimer.seconds() > 1) {
+                    launcherSpinUp();
+                    launcher.set(launcherTargetVelocity);
+                } else launcher.stopMotor();
                 break;
             case "rejecting":
                 launcherTargetVelocity = -.3;
                 launcher.set(launcherTargetVelocity);
-                launcherisReady=true;
+                launcherisReady = true;
                 break;
         }
     }
@@ -626,10 +679,11 @@ public class RegionalsAuto extends LinearOpMode {
             transferLoadSpeed = 0;
             return rangeLUT.get(159);
         } else {
-            if (70 < input && input < 90) transferLoadSpeed = 0.8 * voltageMultiplier;
-            if (90 < input && input < 110) transferLoadSpeed = 0.6 * voltageMultiplier;
-            else if (input > 110) transferLoadSpeed = 0.55 * voltageMultiplier;
+            if (70 < input && input < 90) transferLoadSpeed = 0.9 * voltageMultiplier;
+            else if (90 < input && input < 110) transferLoadSpeed = 0.8 * voltageMultiplier;
+            else if (input > 110) transferLoadSpeed = 0.7 * voltageMultiplier;
             else transferLoadSpeed = 1;
+            if (transferLoadSpeed < 0.75) transferLoadSpeed = 0.7;
             return rangeLUT.get(input);
         }
     }
@@ -639,13 +693,13 @@ public class RegionalsAuto extends LinearOpMode {
         double botY = currentPose.getY();
         double goalX = goalPose.getX();
         double goalY = goalPose.getY();
-        odoRange = Math.hypot(goalX-botX,goalY-botY);
+        odoRange = Math.hypot(goalX - botX, goalY - botY);
         launcherTargetVelocity = calculateRangeLUT(odoRange);
     }
 
     public void turretTargetProcedure() {
         turretTrackProcedure();
-        if (!turretAngleLimited) angleError = turretTicksToAngle(turretTargetPos-turret.getCurrentPosition());
+        if (!turretAngleLimited) angleError = turretTargetPos - trueTurretAngle;
         else angleError = 100;
     }
 
@@ -654,37 +708,26 @@ public class RegionalsAuto extends LinearOpMode {
         turretAngle = calculateTurretAngle(currentPose.getX(), currentPose.getY(), Math.toDegrees((currentPose.getHeading())));
         turretAngle = turretAngleLimiter(turretAngle);
         //if (follower.getVelocity().getMagnitude() < 2 && Math.abs(follower.getAngularVelocity()) < 0.2)
-        turretTargetPos = turretAngleToTicks(turretAngle);
+        turretTargetPos = turretAngle;
     }
 
     public double calculateTurretAngle(double botX, double botY, double botHeading) {
         double goalX = goalPose.getX();
         double goalY = goalPose.getY();
-        double targetAngle = Math.toDegrees(Math.atan2(goalY-botY,goalX-botX));
+        double targetAngle = Math.toDegrees(Math.atan2(goalY - botY, goalX - botX));
         targetAngle -= botHeading + 180 + turretDriftOffset;
-        telemetryM.addData("Target Angle",targetAngle);
+        telemetryM.addData("Target Angle", targetAngle);
         return targetAngle;
     }
 
     public void turretControlLoop() {
-        double output = turretPIDF.calculate(turret.getCurrentPosition(),turretTargetPos);
+        double output = turretPIDF.calculate(trueTurretAngle, turretTargetPos);
         double kSFriction;
-        if (Math.abs(turretPIDF.getPositionError()) <= turretTolerance) {
-            turret.stopMotor();
-        }
-        else {
-            kSFriction = tkSCustom * (Math.abs(turretPIDF.getPositionError()) / turretPIDF.getPositionError());
-            output += kSFriction;
-            turret.set(output);
-        }
-    }
-
-    public int turretAngleToTicks(double angle) {
-        return (int) (angle * 1076.6 / 360); //978.7 with 435
-    }
-
-    public int turretTicksToAngle(double ticks) {
-        return (int) (ticks * 360 / 1076.6); //978.7 with 435
+        kSFriction = tkSCustom * (Math.abs(turretPIDF.getPositionError()) / turretPIDF.getPositionError());
+        if (Math.abs(turretPIDF.getPositionError()) > 1) output += kSFriction;
+        else if (Math.abs(turretPIDF.getPositionError()) < 1) output = 0;
+        if (Math.abs(output) > 0.7) output = output / Math.abs(output) * 0.7;
+        turret.set(output);
     }
 
     public double turretAngleLimiter(double angleAttempt) {
@@ -694,39 +737,39 @@ public class RegionalsAuto extends LinearOpMode {
         } else if (realAngle < -180) {
             realAngle += 360;
         }
-        if ((realAngle > 160 && turret.getCurrentPosition() < 0) || (realAngle < -160 && turret.getCurrentPosition() > 0)) {
+        if ((realAngle > 170 && trueTurretAngle < 0) || (realAngle < -170 && trueTurretAngle > 0)) {
             turretAngleLimited = true;
-            return turretTicksToAngle(turretTargetPos);
+            return turretTargetPos;
         } else turretAngleLimited = false;
-        if (realAngle > 160) {
+        if (realAngle > 175) {
             turretAngleLimited = true;
-            realAngle = 160;
-        } else if (realAngle < -140) {
-            realAngle = -140;
+            realAngle = 175;
+        } else if (realAngle < -145) {
+            realAngle = -145;
             turretAngleLimited = true;
         }
         return realAngle;
     }
 
     public void updateTeamDependents() {
-        if (Objects.equals(team,"blue")){
+        if (Objects.equals(team, "blue")) {
             goalID = 20;
-            startPose = new Pose(x(30),134,a(270));
-            goalPose = new Pose(0,144,Math.toRadians(135));
-            poseResetPose = new Pose(114,7,Math.toRadians(90)); //need to find good one
-            aprilTagPose = new Pose(15,130,0);
-        } else if (Objects.equals(team,"red")) {
+            startPose = new Pose(30, 136, Math.toRadians(270));
+            goalPose = new Pose(0, 144, Math.toRadians(135));
+            poseResetPose = new Pose(114, 7, Math.toRadians(90)); //need to find good one
+            aprilTagPose = new Pose(15, 130, 0);
+        } else if (Objects.equals(team, "red")) {
             goalID = 24;
-            startPose = new Pose(x(30),134,a(270));
-            goalPose = new Pose(144,144,Math.toRadians(45));
-            poseResetPose = new Pose(30,7,Math.toRadians(90)); //need to find good one
-            aprilTagPose = new Pose(129,130,0);
+            startPose = new Pose(x(30), 136, a(270));
+            goalPose = new Pose(144, 144, Math.toRadians(45));
+            poseResetPose = new Pose(30, 7, Math.toRadians(90)); //need to find good one
+            aprilTagPose = new Pose(129, 130, 0);
         }
     }
 
     public double x(double X) { //transform X based on team
         if (Objects.equals(team, "blue")) return X;
-        else return 141.5-(X);
+        else return 141.5 - (X);
     }
 
     public double a(double angle) { //transform heading based on team
@@ -734,14 +777,14 @@ public class RegionalsAuto extends LinearOpMode {
         else return Math.toRadians(-(angle - 90) + 90);
     }
 
-    public void premoveTurret(double x, double y,double heading) {
+    public void premoveTurret(double x, double y, double heading) {
         double turretAngle;
-        turretAngle = calculateTurretAngle(x, y,heading);
+        turretAngle = calculateTurretAngle(x, y, heading);
         turretAngle = turretAngleLimiter(turretAngle);
-        preparedTargetPos = turretAngleToTicks(turretAngle);
+        preparedTargetPos = turretAngle;
         double goalX = goalPose.getX();
         double goalY = goalPose.getY();
-        odoRange = Math.hypot(goalX-x,goalY-y);
+        odoRange = Math.hypot(goalX - x, goalY - y);
         preparedLauncherVelocity = calculateRangeLUT(odoRange);
     }
 
@@ -883,7 +926,7 @@ public class RegionalsAuto extends LinearOpMode {
         }
     }
 
-    public void Far12Solo() {
+    public void Far15Solo() {
         switch (autoState) {
             case 0:
                 PreLoadFar();
@@ -914,13 +957,20 @@ public class RegionalsAuto extends LinearOpMode {
                 }
                 break;
             case 4:
-                ParkFar(follower.getPose());
+                PPGFar();
                 if (segmentState == -1) {
                     segmentState = 0;
                     autoState = 5;
                 }
                 break;
             case 5:
+                ParkFar(follower.getPose());
+                if (segmentState == -1) {
+                    segmentState = 0;
+                    autoState = 6;
+                }
+                break;
+            case 6:
                 resetSubsystems();
                 break;
         }
@@ -981,7 +1031,7 @@ public class RegionalsAuto extends LinearOpMode {
             case 0:
                 follower.followPath(closeStartToScore);
                 hoodState = "adjusting";
-                premoveTurret(x(45),92,Math.toDegrees(a(289)));
+                premoveTurret(x(45), 92, Math.toDegrees(a(289)));
                 segmentState = 1;
                 break;
             case 1:
@@ -1002,20 +1052,20 @@ public class RegionalsAuto extends LinearOpMode {
     public void PPGClose() {
         switch (segmentState) {
             case 0:
-                follower.followPath(PPGIntakeClose,intakeMaxPower,true);
+                follower.followPath(PPGIntakeClose, intakeMaxPower, true);
                 intakeBalls();
                 segmentState = 1;
                 break;
             case 1:
                 if (follower.atParametricEnd()) {
                     resetSubsystems();
-                    premoveTurret(x(51),84,Math.toDegrees(a(180)));
+                    premoveTurret(x(51), 84, Math.toDegrees(a(180)));
                     follower.followPath(PPGToScoreClose);
                     segmentState = 2;
                 }
                 break;
             case 2:
-                if (!follower.isBusy()  && follower.getVelocity().getMagnitude() < 2.0) {
+                if (!follower.isBusy() && follower.getVelocity().getMagnitude() < 2.0) {
                     launchBalls();
                     segmentState = 3;
                 }
@@ -1037,7 +1087,7 @@ public class RegionalsAuto extends LinearOpMode {
                 break;
             case 1:
                 if (!follower.isBusy()) {
-                    follower.followPath(PGPIntakeClose,intakeMaxPower,true);
+                    follower.followPath(PGPIntakeClose, intakeMaxPower, true);
                     intakeBalls();
                     segmentState = 2;
                 }
@@ -1050,7 +1100,7 @@ public class RegionalsAuto extends LinearOpMode {
                         segmentState = 3;
                     } else {
                         follower.followPath(PGPToScoreClose);
-                        premoveTurret(x(57),82,Math.toDegrees(a(210)));
+                        premoveTurret(x(57), 82, Math.toDegrees(a(210)));
                         segmentState = 5;
                     }
                 }
@@ -1063,7 +1113,7 @@ public class RegionalsAuto extends LinearOpMode {
                 break;
             case 4:
                 if (!follower.isBusy()) {
-                    premoveTurret(x(57),82,Math.toDegrees(a(225)));
+                    premoveTurret(x(57), 82, Math.toDegrees(a(225)));
                     follower.followPath(CompatibleGateScore2);
                     segmentState = 5;
                 }
@@ -1091,7 +1141,7 @@ public class RegionalsAuto extends LinearOpMode {
                 break;
             case 1:
                 if (follower.atParametricEnd()) {
-                    follower.followPath(ScoreToRamp2,rampMaxPower,true);
+                    follower.followPath(ScoreToRamp2, rampMaxPower, true);
                     segmentState = 2;
                 }
                 break;
@@ -1117,7 +1167,7 @@ public class RegionalsAuto extends LinearOpMode {
             case 5:
                 if (waitTimer.seconds() > gateWaitTime || isFull) {
                     resetSubsystems();
-                    premoveTurret(x(55),84,Math.toDegrees(a(217)));
+                    premoveTurret(x(55), 84, Math.toDegrees(a(217)));
                     follower.followPath(RampToScore);
                     segmentState = 6;
                 }
@@ -1144,7 +1194,7 @@ public class RegionalsAuto extends LinearOpMode {
                 break;
             case 1:
                 if (!follower.isBusy()) {
-                    follower.followPath(GPPIntakeClose,intakeMaxPower,true);
+                    follower.followPath(GPPIntakeClose, intakeMaxPower, true);
                     intakeBalls();
                     segmentState = 2;
                 }
@@ -1153,7 +1203,7 @@ public class RegionalsAuto extends LinearOpMode {
                 if (!follower.isBusy()) {
                     resetSubsystems();
                     follower.followPath(GPPToScoreClose);
-                    premoveTurret(x(59),79,Math.toDegrees(a(228)));
+                    premoveTurret(x(59), 79, Math.toDegrees(a(228)));
                     segmentState = 3;
                 }
                 break;
@@ -1177,8 +1227,8 @@ public class RegionalsAuto extends LinearOpMode {
             ParkClose = follower.pathBuilder()
                     .addPath(
                             new BezierLine(
-                                    new Pose(initialPose.getX(),initialPose.getY(),initialPose.getHeading()),
-                                    new Pose(x(48),70,initialPose.getHeading()))
+                                    new Pose(initialPose.getX(), initialPose.getY(), initialPose.getHeading()),
+                                    new Pose(x(48), 70, initialPose.getHeading()))
                     )
                     .setConstantHeadingInterpolation(initialPose.getHeading())
                     .build();
@@ -1289,6 +1339,10 @@ public class RegionalsAuto extends LinearOpMode {
         }
     }
 
+    public void PPGFar() {
+
+    }
+
     public void HumanPlayerBlindFar() {
         switch (segmentState) {
             case 0:
@@ -1336,6 +1390,9 @@ public class RegionalsAuto extends LinearOpMode {
     }
 
     public void buildPaths() {
+
+        scorePose = new Pose(x(57),82);
+
         closeStartToScore = follower
                 .pathBuilder()
                 .addPath(
@@ -1359,7 +1416,7 @@ public class RegionalsAuto extends LinearOpMode {
                 .addPath(
                         new BezierLine(new Pose(x(45), 92), new Pose(x(45), 60))
                 )
-                .setLinearHeadingInterpolation(a(289), a(180),0.8)
+                .setLinearHeadingInterpolation(a(289), a(180), 0.8)
                 .build();
 
         PGPIntakeClose = follower
@@ -1374,9 +1431,9 @@ public class RegionalsAuto extends LinearOpMode {
                 .pathBuilder()
                 .addPath(
                         new BezierCurve(
-                                new Pose(x(19),60),
-                                new Pose(x(27),70),
-                                new Pose(x(17.75),70)
+                                new Pose(x(19), 60),
+                                new Pose(x(27), 70),
+                                new Pose(x(17.75), 70)
                         )
                 )
                 .setConstantHeadingInterpolation(a(180))
@@ -1385,7 +1442,7 @@ public class RegionalsAuto extends LinearOpMode {
         PGPToScoreClose = follower
                 .pathBuilder()
                 .addPath(
-                        new BezierLine(new Pose(x(19),60), new Pose(x(57),82))
+                        new BezierLine(new Pose(x(19), 60), new Pose(x(57), 82))
                 )
                 .setTangentHeadingInterpolation()
                 .setReversed()
@@ -1396,7 +1453,7 @@ public class RegionalsAuto extends LinearOpMode {
                 .addPath(
                         new BezierLine(
                                 new Pose(x(17), 70),
-                                new Pose(x(57),70)
+                                new Pose(x(57), 70)
                         )
                 )
                 .setTangentHeadingInterpolation()
@@ -1407,11 +1464,11 @@ public class RegionalsAuto extends LinearOpMode {
                 .pathBuilder()
                 .addPath(
                         new BezierLine(
-                                new Pose(x(57),70),
-                                new Pose(x(57),82)
+                                new Pose(x(57), 70),
+                                new Pose(x(57), 82)
                         )
                 )
-                .setLinearHeadingInterpolation(a(180),a(225),0.8)
+                .setLinearHeadingInterpolation(a(180), a(225), 0.8)
                 .addTemporalCallback(300, preSpinLauncher)
                 .build();
 
@@ -1420,7 +1477,7 @@ public class RegionalsAuto extends LinearOpMode {
                 .addPath(
                         new BezierLine(new Pose(x(55), 84), new Pose(x(38), 66))
                 )
-                .setLinearHeadingInterpolation(a(225), a(135),0.8)
+                .setLinearHeadingInterpolation(a(225), a(135), 0.8)
                 .setNoDeceleration()
                 .build();
 
@@ -1449,7 +1506,7 @@ public class RegionalsAuto extends LinearOpMode {
         RampToScore = follower
                 .pathBuilder()
                 .addPath(
-                        new BezierLine(new Pose(x(12.5),52), new Pose(x(55),84))
+                        new BezierLine(new Pose(x(12.5), 52), new Pose(x(55), 84))
                 )
                 //.setConstantHeadingInterpolation(a(155))
                 .setTangentHeadingInterpolation()
@@ -1460,7 +1517,7 @@ public class RegionalsAuto extends LinearOpMode {
         ScoreToGPPClose = follower
                 .pathBuilder()
                 .addPath(
-                        new BezierLine(new Pose(x(52),84), new Pose(x(52),36))
+                        new BezierLine(new Pose(x(52), 84), new Pose(x(52), 36))
                 )
                 .setConstantHeadingInterpolation(a(180))
                 .build();
@@ -1468,7 +1525,7 @@ public class RegionalsAuto extends LinearOpMode {
         GPPIntakeClose = follower
                 .pathBuilder()
                 .addPath(
-                        new BezierLine(new Pose(x(52),36), new Pose(x(20),36))
+                        new BezierLine(new Pose(x(52), 36), new Pose(x(20), 36))
                 )
                 .setTangentHeadingInterpolation()
                 .build();
@@ -1476,925 +1533,10 @@ public class RegionalsAuto extends LinearOpMode {
         GPPToScoreClose = follower
                 .pathBuilder()
                 .addPath(
-                        new BezierLine(new Pose(x(20),36),new Pose(x(59),79))
+                        new BezierLine(new Pose(x(20), 36), new Pose(x(59), 79))
                 )
                 .setTangentHeadingInterpolation()
                 .setReversed()
-                .build();
-    }
-    public void autoStateMachine18() {
-        switch (autoState) {
-            case -1:
-                break;
-            case 0:
-                transferLoadSpeed = 1.0;
-                follower.followPath(StartToScore);
-                autoState = 1;
-                premoveTurret(x(45),92,Math.toDegrees(a(110)));
-                break;
-            case 1:
-                if (!follower.isBusy()) {
-                    launchBalls();
-                    waitTimer.reset();
-                    autoState = 3;
-                }
-                break;
-            case 2:
-                if (waitTimer.seconds() > .1) {
-                    autoState = 3;
-                }
-                break;
-            case 3:
-                if (launchTimer.seconds() > launchTime) {
-                    resetSubsystems();
-                    follower.followPath(ScoreToPGP18);
-                    autoState = 4;
-                }
-                break;
-            case 4:
-                if (follower.atParametricEnd() && follower.getHeadingError() < follower.getCurrentPath().getPathEndHeadingConstraint()) {
-                    follower.followPath(PGPIntake18,intakeMaxPower,true);
-                    intakeBalls();
-                    autoState = 5;
-                }
-                break;
-            case 5:
-                if (follower.atParametricEnd()) {
-                    resetSubsystems();
-                    launcherState = "rejecting";
-                    intakeState = "intaking";
-                    follower.followPath(PGPToScore18);
-                    premoveTurret(x(48),84,Math.toDegrees(a(223)));
-                    autoState = 6;
-                }
-                break;
-            case 6:
-                if (!follower.isBusy()) {
-                    launchBalls();
-                    autoState = 7;
-                }
-                break;
-            case 7:
-                if (launchTimer.seconds() > launchTime) {
-                    resetSubsystems();
-                    follower.followPath(ScoreToRamp1);
-                    autoState = 8;
-                }
-                break;
-            case 8:
-                if (follower.getTranslationalError().getMagnitude() < 2) {
-                    follower.followPath(IntakeRamp,rampMaxPower,true);
-                    intakeBalls();
-                    launcherState = "rejectFaster";
-                    autoState = 9;
-                }
-                break;
-            case 9:
-                if (!follower.isBusy()) {
-                    autoState = 10;
-                    follower.holdPoint(new Pose(x(12.5),59.5,a(140)));
-                    waitTimer.reset();
-                }
-                break;
-            case 10:
-                if (waitTimer.seconds() > gateWaitTime) {
-                    resetSubsystems();
-                    launcherState = "rejecting";
-                    intakeState = "intaking";
-                    premoveTurret(x(49),84,Math.toDegrees(a(216)));
-                    follower.followPath(RampToScore1);
-                    autoState = -5;
-                }
-                break;
-            case -5:
-                if (follower.atParametricEnd()) {
-                    follower.followPath(RampToScore2);
-                    autoState = 11;
-                }
-                break;
-            case 11:
-                if (!follower.isBusy()) {
-                    launchBalls();
-                    autoState = 12;
-                }
-                break;
-            case 12:
-                if (launchTimer.seconds() > launchTime) {
-                    resetSubsystems();
-                    follower.followPath(ScoreToRamp2);
-                    autoState = 14;
-                }
-                break;
-            case 14:
-                if (follower.getTranslationalError().getMagnitude() < 2) {
-                    follower.followPath(IntakeRamp,rampMaxPower,true);
-                    intakeBalls();
-                    launcherState = "rejectFaster";
-                    telemetryM.addData("Drive error",follower.getTranslationalError().getMagnitude());
-                    autoState = 15;
-                }
-                break;
-            case 15:
-                if (!follower.isBusy()) {
-                    autoState = 16;
-                    waitTimer.reset();
-                    follower.holdPoint(new Pose(x(12.5),59.5,a(140)));
-                }
-                break;
-            case 16:
-                if (waitTimer.seconds() > gateWaitTime) {
-                    resetSubsystems();
-                    launcherState = "rejecting";
-                    intakeState = "intaking";
-                    premoveTurret(x(49),84,Math.toDegrees(a(216)));
-                    follower.followPath(RampToScore1);
-                    autoState = -6;
-                }
-                break;
-            case -6:
-                if (follower.getDriveError() < 2) {
-                    follower.followPath(RampToScore2);
-                    autoState = 17;
-                }
-                break;
-            case 17:
-                if (!follower.isBusy()) {
-                    launchBalls();
-                    autoState = 19;
-                }
-                break;
-            case 18:
-                if (launchTimer.seconds() > launchTime) {
-                    resetSubsystems();
-                    //follower.turnTo(a(180));
-                    autoState = 19;
-                }
-                break;
-            case 19:
-                if (launchTimer.seconds() > launchTime) {
-                    resetSubsystems();
-                    follower.followPath(PPGIntake18,intakeMaxPower,true);
-                    intakeBalls();
-                    autoState = 20;
-                }
-                break;
-            case 20:
-                if (follower.atParametricEnd()) {
-                    resetSubsystems();
-                    launcherState = "rejecting";
-                    intakeState = "intaking";
-                    premoveTurret(x(49),84,Math.toDegrees(a(180)));
-                    follower.followPath(PPGToScore);
-                    autoState = 21;
-                }
-                break;
-            case 21:
-                if (!follower.isBusy()) {
-                    launchBalls();
-                    autoState = 22;
-                }
-                break;
-            case 22:
-                if (launchTimer.seconds() > launchTime) {
-                    resetSubsystems();
-                    follower.followPath(ScoreToGPPClose);
-                    autoState = 24;
-                }
-                break;
-            case 23:
-                if (!follower.isBusy()) {
-                    follower.turnTo(a(180));
-                    autoState = 24;
-                }
-                break;
-            case 24:
-                if (!follower.isBusy()) {
-                    follower.followPath(GPPIntake18,intakeMaxPower,true);
-                    intakeBalls();
-                    autoState = 25;
-                }
-                break;
-            case 25:
-                if (follower.atParametricEnd()) {
-                    resetSubsystems();
-                    launcherState = "rejecting";
-                    intakeState = "intaking";
-                    premoveTurret(x(56),80,Math.toDegrees(a(230)));
-                    follower.followPath(GPPToScore18one);
-                    autoState = -7;
-                }
-                break;
-            case -7:
-                if (follower.atParametricEnd()) {
-                    follower.followPath(GPPToScore18two);
-                    autoState = 26;
-                }
-                break;
-            case 26:
-                if (!follower.isBusy()) {
-                    launchBalls();
-                    autoState = 27;
-                }
-                break;
-            case 27:
-                if (launchTimer.seconds() > launchTime) {
-                    follower.followPath(Park18);
-                    resetSubsystems();
-                    autoState = 28;
-                }
-                break;
-            case 28:
-                telemetryM.addLine("Autonomous Complete!!! :D");
-                endPosition = follower.getPose();
-                break;
-        }
-    }
-
-    public void buildPaths18() { // capital first letter means for the 18 auto
-        StartToScore = follower
-                .pathBuilder()
-                .addPath(
-                        new BezierLine(new Pose(x(30), 136), new Pose(x(45), 92))
-                )
-                .setTangentHeadingInterpolation()
-                //.setReversed()
-                .addTemporalCallback(500, preSpinLauncher)
-                .setBrakingStrength(0.68)
-                .build();
-
-        ScoreToPGP18 = follower
-                .pathBuilder()
-                .addPath(
-                        new BezierLine(new Pose(x(45), 92), new Pose(x(45), 60))
-                )
-                .setLinearHeadingInterpolation(a(110), a(180),0.8)
-                //.setBrakingStrength(0.6)
-                .build();
-
-        PGPIntake18 = follower
-                .pathBuilder()
-                .addPath(
-                        new BezierLine(new Pose(x(45), 60), new Pose(x(22), 60))
-                )
-                .setTangentHeadingInterpolation()
-                //.setBrakingStrength(0.6)
-                .build();
-
-        PGPToScore18 = follower
-                .pathBuilder()
-                .addPath(
-                        new BezierLine(new Pose(x(22), 60), new Pose(x(48), 84))
-                )
-                .setTangentHeadingInterpolation()
-                .setReversed()
-                .addTemporalCallback(200,stopIntake)
-//                .addTemporalCallback(300, rejectIntake)
-//                .addTemporalCallback(400, stopIntake)
-                .addTemporalCallback(500, preSpinLauncher)
-                .setBrakingStrength(0.66)
-                .build();
-
-        ScoreToRamp1 = follower
-                .pathBuilder()
-                .addPath(
-                        new BezierLine(new Pose(x(48), 84), new Pose(x(35), 63))
-                )
-                .setLinearHeadingInterpolation(a(223), a(140),0.8)
-                .build();
-
-        IntakeRamp = follower
-                .pathBuilder()
-                .addPath(
-                        new BezierLine(
-                                new Pose(x(32), 59.5),
-                                new Pose(x(12.5), 59.5)
-                        )
-                )
-                .setConstantHeadingInterpolation(a(140))
-                .build();
-
-        RampToScore1 = follower
-                .pathBuilder()
-                .addPath(
-                        new BezierLine(new Pose(x(13.0),59.5), new Pose(x(16),60))
-                )
-                .setConstantHeadingInterpolation(a(140))
-                .setNoDeceleration()
-                .addTemporalCallback(200,stopIntake)
-//                .addTemporalCallback(300, rejectIntake)
-//                .addTemporalCallback(400, stopIntake)
-                .addTemporalCallback(500, preSpinLauncher)
-                .build();
-
-        RampToScore2 = follower
-                .pathBuilder()
-                .addPath(
-                        new BezierLine(new Pose(x(17), 60), new Pose(x(49), 84))
-                )
-                .setTangentHeadingInterpolation()
-                .setReversed()
-                .setBrakingStrength(0.66)
-                .build();
-
-        ScoreToRamp2 = follower
-                .pathBuilder()
-                .addPath(
-                        new BezierLine(new Pose(x(49), 84), new Pose(x(35), 63))
-                )
-                .setLinearHeadingInterpolation(a(213), a(140),0.8)
-                .build();
-
-        //follower.turnTo(a(180));
-        PPGIntake18 = follower
-                .pathBuilder()
-                .addPath(
-                        new BezierLine(new Pose(x(49), 84), new Pose(x(20), 84))
-                )
-                .setTangentHeadingInterpolation()
-                .build();
-
-        PPGToScore = follower
-                .pathBuilder()
-                .addPath(
-                        new BezierLine(new Pose(x(20), 84), new Pose(x(49), 84))
-                )
-                .setTangentHeadingInterpolation()
-                .setReversed()
-                .addTemporalCallback(200,stopIntake)
-//                .addTemporalCallback(300, rejectIntake)
-//                .addTemporalCallback(400, stopIntake)
-                .addTemporalCallback(500, preSpinLauncher)
-                .setBrakingStrength(0.68)
-                .build();
-
-        ScoreToGPPClose = follower
-                .pathBuilder()
-                .addPath(
-                        new BezierLine(new Pose(x(49), 84), new Pose(x(48), 65))
-                )
-                .setTangentHeadingInterpolation()
-                .setNoDeceleration()
-                .addPath(
-                        new BezierLine(new Pose(x(48),65), new Pose(x(48),39))
-                )
-                .setLinearHeadingInterpolation(a(270),a(180),.8)
-                .build();
-
-        //follower.turnTo(a(180));
-        GPPIntake18 = follower
-                .pathBuilder()
-                .addPath(
-                        new BezierLine(new Pose(x(48), 36), new Pose(x(20), 36))
-                )
-                .setTangentHeadingInterpolation()
-                .build();
-
-        GPPToScore18one = follower
-                .pathBuilder()
-                .addPath(
-                        new BezierLine(new Pose(x(20), 36), new Pose(x(38),58))
-                )
-                .setTangentHeadingInterpolation()
-                .setReversed()
-                .setNoDeceleration()
-                .addTemporalCallback(200,stopIntake)
-//                .addTemporalCallback(300, rejectIntake)
-//                .addTemporalCallback(400, stopIntake)
-                .addTemporalCallback(500, preSpinLauncher)
-                .build();
-
-        GPPToScore18two = follower
-                .pathBuilder()
-                .addPath(
-                        new BezierLine(new Pose(x(38),58),new Pose(x(56),80))
-                )
-                .setTangentHeadingInterpolation()
-                .setReversed()
-                .build();
-
-        Park18 = follower
-                .pathBuilder()
-                .addPath(
-                        new BezierLine(new Pose(x(56),80), new Pose(x(48),72))
-                )
-                .setTangentHeadingInterpolation()
-                .build();
-    }
-
-    public void autoStateMachine15() {
-        switch (autoState) {
-            case -1:
-                break;
-            case 0:
-                follower.followPath(closeStartToScore);
-                hoodState = "adjusting";
-                autoState = 1;
-                premoveTurret(x(45),92,Math.toDegrees(a(289)));
-                break;
-            case 1:
-                if (!follower.isBusy() && follower.getVelocity().getMagnitude() < 2.0) {
-                    launchBalls();
-                    autoState = 3;
-                }
-                break;
-            case 3:
-                if (shootTimeout.seconds() > launchTime) {
-                    resetSubsystems();
-                    follower.followPath(ScoreToPGPClose);
-                    autoState = 4;
-                }
-                break;
-            case 4:
-                if (!follower.isBusy()) {
-                    follower.followPath(PGPIntakeClose,intakeMaxPower15,true);
-                    intakeBalls();
-                    autoState = 5;
-                }
-                break;
-            case 5:
-                if (!follower.isBusy()) {
-                    follower.followPath(PGPToScoreClose);
-                    premoveTurret(x(57),82,Math.toDegrees(a(217)));
-                    autoState = 6;
-                }
-                break;
-            case 6:
-                if (!follower.isBusy() && follower.getVelocity().getMagnitude() < 2.0) {
-                    launchBalls();
-                    autoState = 7;
-                }
-                break;
-            case 7:
-                if (shootTimeout.seconds() > launchTime15) {
-                    resetSubsystems();
-                    follower.followPath(ScoreToRamp1);
-                    autoState = -8;
-                }
-                break;
-            case -8:
-                if (follower.atParametricEnd()) {
-                    follower.followPath(ScoreToRamp2,rampMaxPower15,true);
-                    autoState = -9;
-                }
-                break;
-            case -9:
-                if (!follower.isBusy()) {
-                    waitTimer.reset();
-                    autoState = 8;
-                }
-                break;
-            case 8:
-                if (!follower.isBusy() && waitTimer.seconds() > 0.4) {
-                    follower.followPath(IntakeRamp);
-                    intakeBalls();
-                    autoState = 9;
-                }
-                break;
-            case 9:
-                if (!follower.isBusy()) {
-                    autoState = 10;
-                    follower.holdPoint(new Pose(x(13),52,a(140)));
-                    waitTimer.reset();
-                }
-                break;
-            case 10:
-                if (waitTimer.seconds() > gateWait15 || isFull) {
-                    resetSubsystems();
-                    premoveTurret(x(55),84,Math.toDegrees(a(217)));
-                    follower.followPath(RampToScore);
-                    autoState = 11;
-                }
-                break;
-            case 11:
-                if (!follower.isBusy() && follower.getVelocity().getMagnitude() < 2.0) {
-                    launchBalls();
-                    autoState = 20;
-                }
-                break;
-            case 20:
-                if (shootTimeout.seconds() > launchTime15) {
-                    resetSubsystems();
-                    follower.followPath(PPGIntakeClose,intakeMaxPower15,true);
-                    intakeBalls();
-                    autoState = 21;
-                }
-                break;
-            case 21:
-                if (follower.atParametricEnd()) {
-                    resetSubsystems();
-                    premoveTurret(x(51),84,Math.toDegrees(a(180)));
-                    follower.followPath(PPGToScoreClose);
-                    autoState = 22;
-                }
-                break;
-            case 22:
-                if (!follower.isBusy() && follower.getVelocity().getMagnitude() < 1.5) {
-                    launchBalls();
-                    autoState = 23;
-                }
-                break;
-            case 23:
-                if (!follower.isBusy()) {
-                    follower.followPath(ScoreToGPPClose);
-                    autoState = 24;
-                }
-                break;
-            case 24:
-                if (!follower.isBusy()) {
-                    follower.followPath(GPPIntakeClose,intakeMaxPower15,true);
-                    intakeBalls();
-                    autoState = 25;
-                }
-                break;
-            case 25:
-                if (!follower.isBusy()) {
-                    resetSubsystems();
-                    follower.followPath(GPPToScoreClose);
-                    premoveTurret(59,79,a(228));
-                    autoState = 26;
-                }
-            case 26:
-                if (!follower.isBusy()) {
-                    launchBalls();
-                    autoState = 30;
-                }
-                break;
-            case 30:
-                if (shootTimeout.seconds() > launchTime15) {
-                    follower.followPath(Park15);
-                    resetSubsystems();
-                    autoState = 31;
-                }
-                break;
-            case 31:
-                telemetryM.addLine("15 Autonomous Complete!!! :D");
-                endPosition = follower.getPose();
-                break;
-        }
-    }
-
-    public void autoStateMachine15Compatible() {
-        switch (autoState) {
-            case -1:
-                break;
-            case 0:
-                follower.followPath(closeStartToScore);
-                hoodState = "adjusting";
-                autoState = 1;
-                premoveTurret(x(45),92,Math.toDegrees(a(289)));
-                break;
-            case 1:
-                if (!follower.isBusy() && follower.getVelocity().getMagnitude() < 2.0) {
-                    launchBalls();
-                    autoState = 3;
-                }
-                break;
-            case 3:
-                if (shootTimeout.seconds() > launchTime) {
-                    resetSubsystems();
-                    follower.followPath(ScoreToPGPClose);
-                    autoState = 4;
-                }
-                break;
-            case 4:
-                if (!follower.isBusy()) {
-                    follower.followPath(PGPIntakeClose,intakeMaxPower15,true);
-                    intakeBalls();
-                    autoState = -10;
-                }
-                break;
-            case -10:
-                if (!follower.isBusy()) {
-                    follower.followPath(PGPToGateClose);
-                    resetSubsystems();
-                    autoState = 5;
-                }
-                break;
-            case 5:
-                if (!follower.isBusy()) {
-                    follower.followPath(CompatibleGateScore1);
-                    autoState = -100;
-                }
-                break;
-            case -100:
-                if (!follower.isBusy()) {
-                    premoveTurret(x(57),82,Math.toDegrees(a(225)));
-                    follower.followPath(CompatibleGateScore2);
-                    autoState = 6;
-                }
-            case 6:
-                if (!follower.isBusy() && follower.getVelocity().getMagnitude() < 2.0) {
-                    launchBalls();
-                    autoState = 7;
-                }
-                break;
-            case 7:
-                if (shootTimeout.seconds() > launchTime15) {
-                    resetSubsystems();
-                    follower.followPath(ScoreToRamp1);
-                    autoState = -8;
-                }
-                break;
-            case -8:
-                if (follower.atParametricEnd()) {
-                    follower.followPath(ScoreToRamp2,rampMaxPower15,true);
-                    autoState = -9;
-                }
-                break;
-            case -9:
-                if (!follower.isBusy()) {
-                    waitTimer.reset();
-                    autoState = 8;
-                }
-                break;
-            case 8:
-                if (!follower.isBusy() && waitTimer.seconds() > 0.4) {
-                    follower.followPath(IntakeRamp);
-                    intakeBalls();
-                    autoState = 9;
-                }
-                break;
-            case 9:
-                if (!follower.isBusy()) {
-                    autoState = 10;
-                    follower.holdPoint(new Pose(x(13),52,a(140)));
-                    waitTimer.reset();
-                }
-                break;
-            case 10:
-                if (waitTimer.seconds() > gateWait15 || isFull) {
-                    resetSubsystems();
-                    premoveTurret(x(55),84,Math.toDegrees(a(217)));
-                    follower.followPath(RampToScore);
-                    autoState = 11;
-                }
-                break;
-            case 11:
-                if (!follower.isBusy() && follower.getVelocity().getMagnitude() < 2.0) {
-                    launchBalls();
-                    autoState = 12;
-                }
-                break;
-            case 12:
-                if (shootTimeout.seconds() > launchTime15) {
-                    resetSubsystems();
-                    follower.followPath(ScoreToRamp115twoC);
-                    autoState = 13;
-                }
-                break;
-            case 13:
-                if (follower.atParametricEnd()) {
-                    follower.followPath(ScoreToRamp2,rampMaxPower15,true);
-                    autoState = 14;
-                }
-                break;
-            case 14:
-                if (!follower.isBusy()) {
-                    waitTimer.reset();
-                    autoState = 15;
-                }
-                break;
-            case 15:
-                if (!follower.isBusy() && waitTimer.seconds() > 0.4) {
-                    follower.followPath(IntakeRamp);
-                    intakeBalls();
-                    autoState = 16;
-                }
-                break;
-            case 16:
-                if (!follower.isBusy()) {
-                    autoState = 17;
-                    follower.holdPoint(new Pose(x(13),52,a(140)));
-                    waitTimer.reset();
-                }
-                break;
-            case 17:
-                if (waitTimer.seconds() > gateWait15 || isFull) {
-                    resetSubsystems();
-                    premoveTurret(x(55),84,Math.toDegrees(a(217)));
-                    follower.followPath(RampToScore);
-                    autoState = 19;
-                }
-                break;
-            case 19:
-                if (!follower.isBusy() && follower.getVelocity().getMagnitude() < 2.0) {
-                    launchBalls();
-                    autoState = 20;
-                }
-                break;
-            case 20:
-                if (shootTimeout.seconds() > launchTime15) {
-                    resetSubsystems();
-                    follower.followPath(PPGIntakeClose,intakeMaxPower15,true);
-                    intakeBalls();
-                    autoState = 21;
-                }
-                break;
-            case 21:
-                if (follower.atParametricEnd()) {
-                    resetSubsystems();
-                    premoveTurret(x(51),84,Math.toDegrees(a(180)));
-                    follower.followPath(PPGToScoreClose);
-                    autoState = 22;
-                }
-                break;
-            case 22:
-                if (!follower.isBusy() && follower.getVelocity().getMagnitude() < 1.5) {
-                    launchBalls();
-                    autoState = 23;
-                }
-                break;
-            case 23:
-                if (shootTimeout.seconds() > launchTime15) {
-                    follower.followPath(Park15C);
-                    resetSubsystems();
-                    autoState = 24;
-                }
-                break;
-            case 24:
-                telemetryM.addLine("15 Autonomous Complete!!! :D");
-                endPosition = follower.getPose();
-                break;
-        }
-    }
-
-    public void buildPaths15Compatible() {
-        closeStartToScore = follower
-                .pathBuilder()
-                .addPath(
-                        new BezierLine(new Pose(x(30), 136), new Pose(x(45), 92))
-                )
-                .setTangentHeadingInterpolation()
-                .addTemporalCallback(300, preSpinLauncher)
-                .build();
-
-        ScoreToPGPClose = follower
-                .pathBuilder()
-                .addPath(
-                        new BezierLine(new Pose(x(45), 92), new Pose(x(45), 60))
-                )
-                .setLinearHeadingInterpolation(a(289), a(180),0.8)
-                .build();
-
-        PGPIntakeClose = follower
-                .pathBuilder()
-                .addPath(
-                        new BezierLine(new Pose(x(45), 60), new Pose(x(19), 60))
-                )
-                .setTangentHeadingInterpolation()
-                .build();
-
-        PGPToScoreClose = follower
-                .pathBuilder()
-                .addPath(
-                        new BezierLine(new Pose(x(19),60), new Pose(x(57),82))
-                )
-                .setTangentHeadingInterpolation()
-                .setReversed()
-                .build();
-
-        PGPToGateClose = follower
-                .pathBuilder()
-                .addPath(
-                        new BezierCurve(
-                                new Pose(x(19),60),
-                                new Pose(x(27),70),
-                                new Pose(x(17.75),70)
-                        )
-                )
-                .setConstantHeadingInterpolation(a(180))
-                .build();
-
-        CompatibleGateScore1 = follower
-                .pathBuilder()
-                .addPath(
-                        new BezierLine(
-                                new Pose(x(17), 70),
-                                new Pose(x(57),70)
-                        )
-                )
-                .setTangentHeadingInterpolation()
-                .setReversed()
-                .build();
-
-        CompatibleGateScore2 = follower
-                .pathBuilder()
-                .addPath(
-                        new BezierLine(
-                                new Pose(x(57),70),
-                                new Pose(x(57),82)
-                        )
-                )
-                .setLinearHeadingInterpolation(a(180),a(225),0.8)
-                .addTemporalCallback(300, preSpinLauncher)
-                .build();
-
-        ScoreToRamp1 = follower
-                .pathBuilder()
-                .addPath(
-                        new BezierLine(new Pose(x(55), 84), new Pose(x(38), 66))
-                )
-                .setLinearHeadingInterpolation(a(225), a(135),0.8)
-                .setNoDeceleration()
-                .build();
-
-        ScoreToRamp115twoC = follower
-                .pathBuilder()
-                .addPath(
-                        new BezierLine(new Pose(x(55), 84), new Pose(x(38), 66))
-                )
-                .setLinearHeadingInterpolation(a(155), a(135),0.8)
-                .setNoDeceleration()
-                .build();
-
-        ScoreToRamp2 = follower
-                .pathBuilder()
-                .addPath(
-                        new BezierLine(
-                                new Pose(x(32), 59.5),
-                                new Pose(x(12.5), 59.5)
-                        )
-                )
-                .setConstantHeadingInterpolation(a(135))
-                .build();
-
-        IntakeRamp = follower
-                .pathBuilder()
-                .addPath(
-                        new BezierLine(
-                                new Pose(x(12.5), 59.5),
-                                new Pose(x(12.5), 52)
-                        )
-                )
-                .setConstantHeadingInterpolation(a(135))
-                .build();
-
-        RampToScore = follower
-                .pathBuilder()
-                .addPath(
-                        new BezierLine(new Pose(x(12.5),52), new Pose(x(55),84))
-                )
-                //.setConstantHeadingInterpolation(a(155))
-                .setTangentHeadingInterpolation()
-                .setReversed()
-                .addTemporalCallback(300, preSpinLauncher)
-                .build();
-
-        PPGIntakeClose = follower
-                .pathBuilder()
-                .addPath(
-                        new BezierLine(new Pose(x(52), 86), new Pose(x(21), 84))
-                )
-                .setTangentHeadingInterpolation()
-                .build();
-
-        PPGIntakeClose = follower
-                .pathBuilder()
-                .addPath(
-                        new BezierLine(new Pose(x(52), 86), new Pose(x(21), 84))
-                )
-                .setTangentHeadingInterpolation()
-                .build();
-        ScoreToGPPClose = follower
-                .pathBuilder()
-                .addPath(
-                        new BezierLine(new Pose(x(52),84), new Pose(x(52),36))
-                )
-                .setConstantHeadingInterpolation(a(180))
-                .build();
-
-        GPPIntake15C = follower
-                .pathBuilder()
-                .addPath(
-                        new BezierLine(new Pose(x(52),36), new Pose(x(20),84))
-                )
-                .setTangentHeadingInterpolation()
-                .build();
-
-        GPPToScoreClose = follower
-                .pathBuilder()
-                .addPath(
-                        new BezierLine(new Pose(x(20),36),new Pose(x(59),79))
-                )
-                .setTangentHeadingInterpolation()
-                .setReversed()
-                .build();
-
-        Park15C = follower
-                .pathBuilder()
-                .addPath(
-                        new BezierLine(new Pose(x(52),84), new Pose(x(48),72))
-                )
-                .setConstantHeadingInterpolation(a(180))
-                .build();
-
-        Park15 = follower
-                .pathBuilder()
-                .addPath(
-                        new BezierLine(new Pose(x(59),79), new Pose(x(50),70))
-                )
-                .setTangentHeadingInterpolation()
                 .build();
     }
 }
-
