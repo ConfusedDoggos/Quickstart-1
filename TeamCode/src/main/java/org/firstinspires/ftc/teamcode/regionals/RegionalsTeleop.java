@@ -598,6 +598,7 @@ public class RegionalsTeleop extends LinearOpMode {
                 if (intakeTimer.seconds() > 0.08) {
                     intake.set(1);
                 }
+                break;
         }
     }
 

@@ -165,7 +165,7 @@ public class RegionalsAuto extends LinearOpMode {
     public static double gateWaitTime = 1.2;
     public static double intakeMaxPower15 = 0.9;
     public static double rampMaxPower15 = 1.0;
-    public static double farLaunchTime = .8;
+    public static double farLaunchTime = 1.2;
     public static Pose endPosition = new Pose(0, 0, 0);
 
 
@@ -469,23 +469,25 @@ public class RegionalsAuto extends LinearOpMode {
     }
 
     public void sensorTeleOp() {
-        if (cyclesSinceUpdate == 9) {
-            cyclesSinceUpdate = 0;
-            distance1 = distanceSensor1.getDistance(DistanceUnit.INCH);
-            prevBallIn1 = ballIn1;
-            ballIn1 = distance1 < 4;
+        if (Objects.equals(launcherState,"idle") || Objects.equals(launcherState, "off")) {
+            if (cyclesSinceUpdate == 9) {
+                cyclesSinceUpdate = 0;
+                distance1 = distanceSensor1.getDistance(DistanceUnit.INCH);
+                prevBallIn1 = ballIn1;
+                ballIn1 = distance1 < 4;
+            }
+            if (cyclesSinceUpdate == 6) {
+                colorAlpha = colorSensor.alpha();
+                prevBallIn2 = ballIn2;
+                ballIn2 = colorAlpha > 70;
+            }
+            if (cyclesSinceUpdate == 3) {
+                distance2 = distanceSensor2.getDistance(DistanceUnit.INCH);
+                prevBallIn3 = ballIn3;
+                ballIn3 = distance2 < 4;
+            }
+            cyclesSinceUpdate++;
         }
-        if (cyclesSinceUpdate == 6) {
-            colorAlpha = colorSensor.alpha();
-            prevBallIn2 = ballIn2;
-            ballIn2 = colorAlpha > 70;
-        }
-        if (cyclesSinceUpdate == 3) {
-            distance2 = distanceSensor2.getDistance(DistanceUnit.INCH);
-            prevBallIn3 = ballIn3;
-            ballIn3 = distance2 < 4;
-        }
-        cyclesSinceUpdate++;
 
         telemetryM.addData("Distance1", distance1);
         telemetryM.addData("Distance2", distance2);
@@ -542,6 +544,16 @@ public class RegionalsAuto extends LinearOpMode {
             case "rejecting":
                 intake.set(intakeRejectSpeed);
                 blockerServo.set(openAngle);
+                break;
+            case "shortReject":
+                intake.set(-1);
+                intakeTimer.reset();
+                intakeState = "shortRejecting";
+                break;
+            case "shortRejecting":
+                if (intakeTimer.seconds() > 0.08) {
+                    intake.set(1);
+                }
                 break;
         }
     }
@@ -908,14 +920,14 @@ public class RegionalsAuto extends LinearOpMode {
                 }
                 break;
             case 2:
-                PGPFar();
+                HumanPlayerFar();
                 if (segmentState == -1) {
                     segmentState = 0;
                     autoState = 3;
                 }
                 break;
             case 3:
-                LowerGPGFar();
+                HumanPlayerFar();
                 if (segmentState == -1) {
                     segmentState = 0;
                     autoState = 4;
@@ -951,34 +963,41 @@ public class RegionalsAuto extends LinearOpMode {
                 }
                 break;
             case 1:
-                GPPFar();
+                HumanPlayerFar();
                 if (segmentState == -1) {
                     segmentState = 0;
                     autoState = 2;
                 }
                 break;
             case 2:
-                LowerGPGFar();
+                GPPFar();
                 if (segmentState == -1) {
                     segmentState = 0;
                     autoState = 3;
                 }
                 break;
             case 3:
-                GateFar();
+                HumanPlayerFar();
                 if (segmentState == -1) {
                     segmentState = 0;
                     autoState = 4;
                 }
                 break;
             case 4:
-                ParkFar(follower.getPose());
+                HumanPlayerFar();
                 if (segmentState == -1) {
                     segmentState = 0;
                     autoState = 5;
                 }
                 break;
             case 5:
+                ParkFar(follower.getPose());
+                if (segmentState == -1) {
+                    segmentState = 0;
+                    autoState = 6;
+                }
+                break;
+            case 6:
                 resetSubsystems();
                 break;
         }
@@ -1214,11 +1233,16 @@ public class RegionalsAuto extends LinearOpMode {
                 segmentState = 1;
                 break;
             case 1:
-                launchBalls();
-                segmentState = 2;
+                if (!follower.isBusy()) {
+                    launchBalls();
+                    segmentState = 2;
+                }
                 break;
             case 2:
-                if (launchTimer.seconds() > launchTime) {
+                if (launchTimer.seconds() > farLaunchTime - 0.5) {
+                    intakeState = "shortReject";
+                }
+                if (launchTimer.seconds() > farLaunchTime) {
                     resetSubsystems();
                     segmentState = -1;
                 }
@@ -1261,7 +1285,7 @@ public class RegionalsAuto extends LinearOpMode {
         }
     }
 
-    public void LowerGPGFar() {
+    public void HumanPlayerFar() {
         switch (segmentState) {
             case 0:
                 follower.followPath(FarCompatible_LaunchToLowerGPG);
@@ -1296,7 +1320,7 @@ public class RegionalsAuto extends LinearOpMode {
         }
     }
 
-    public void GateFar() {
+    public void HumanPlayerBlindFar() {
         switch (segmentState) {
             case 0:
                 follower.followPath(FarCompatible_LaunchToGate);
@@ -1339,28 +1363,6 @@ public class RegionalsAuto extends LinearOpMode {
 
     }
 
-    public void HumanPlayerBlindFar() {
-        switch (segmentState) {
-            case 0:
-
-                break;
-            case 1:
-
-                break;
-            case 2:
-
-                break;
-            case 3:
-
-                break;
-            case 4:
-
-                break;
-            case 5:
-
-                break;
-        }
-    }
 
     public void ParkFar(Pose initialPose) {
         switch (segmentState) {
