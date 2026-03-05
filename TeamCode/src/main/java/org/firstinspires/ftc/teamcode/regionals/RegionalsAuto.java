@@ -194,6 +194,15 @@ public class RegionalsAuto extends LinearOpMode {
     public PathChain PPGIntakeClose;
     public PathChain PPGToScoreClose;
     public PathChain GPPToScoreClose;
+    public PathChain FarCompatible_StartToGPP;
+    public PathChain FarCompatible_IntakeGPP;
+    public PathChain FarCompatible_GPPToLaunch;
+    public PathChain FarCompatible_LaunchToLowerGPG;
+    public PathChain FarCompatible_IntakeLowerGPG;
+    public PathChain FarCompatible_LowerGPGToLaunch;
+    public PathChain FarCompatible_LaunchToGate;
+    public PathChain FarCompatible_IntakeGate;
+    public PathChain FarCompatible_GateToLaunch;
 
     //Changing variables
     public int autoState = 0;
@@ -906,7 +915,7 @@ public class RegionalsAuto extends LinearOpMode {
                 }
                 break;
             case 3:
-                HumanPlayerFar();
+                LowerGPGFar();
                 if (segmentState == -1) {
                     segmentState = 0;
                     autoState = 4;
@@ -949,34 +958,27 @@ public class RegionalsAuto extends LinearOpMode {
                 }
                 break;
             case 2:
-                HumanPlayerFar();
+                LowerGPGFar();
                 if (segmentState == -1) {
                     segmentState = 0;
                     autoState = 3;
                 }
                 break;
             case 3:
-                HumanPlayerBlindFar();
+                GateFar();
                 if (segmentState == -1) {
                     segmentState = 0;
                     autoState = 4;
                 }
                 break;
             case 4:
-                HumanPlayerBlindFar();
+                ParkFar(follower.getPose());
                 if (segmentState == -1) {
                     segmentState = 0;
                     autoState = 5;
                 }
                 break;
             case 5:
-                ParkFar(follower.getPose());
-                if (segmentState == -1) {
-                    segmentState = 0;
-                    autoState = 6;
-                }
-                break;
-            case 6:
                 resetSubsystems();
                 break;
         }
@@ -1207,22 +1209,19 @@ public class RegionalsAuto extends LinearOpMode {
     public void PreLoadFar() {
         switch (segmentState) {
             case 0:
-
+                hoodState = "adjusting";
+                premoveTurret(currentPose.getX(), currentPose.getY(), Math.toDegrees(currentPose.getHeading()));
+                segmentState = 1;
                 break;
             case 1:
-
+                launchBalls();
+                segmentState = 2;
                 break;
             case 2:
-
-                break;
-            case 3:
-
-                break;
-            case 4:
-
-                break;
-            case 5:
-
+                if (launchTimer.seconds() > launchTime) {
+                    resetSubsystems();
+                    segmentState = -1;
+                }
                 break;
         }
     }
@@ -1230,70 +1229,110 @@ public class RegionalsAuto extends LinearOpMode {
     public void GPPFar() {
         switch (segmentState) {
             case 0:
-
+                follower.followPath(FarCompatible_StartToGPP);
+                segmentState = 1;
                 break;
             case 1:
-
+                if(!follower.isBusy()) {
+                    follower.followPath(FarCompatible_IntakeGPP, intakeMaxPower, true);
+                    intakeBalls();
+                    segmentState = 2;
+                }
                 break;
             case 2:
-
+                if (!follower.isBusy()) {
+                    follower.followPath(FarCompatible_GPPToLaunch);
+                    premoveTurret(FarCompatible_GPPToLaunch.endPose().getX(), FarCompatible_GPPToLaunch.endPose().getY(), Math.toDegrees(FarCompatible_GPPToLaunch.endPose().getHeading()));
+                    segmentState = 3;
+                }
                 break;
             case 3:
-
+                if (!follower.isBusy() && follower.getVelocity().getMagnitude() < 2.0) {
+                    launchBalls();
+                    segmentState = 4;
+                }
                 break;
             case 4:
-
-                break;
-            case 5:
-
+                if (launchTimer.seconds() > launchTime) {
+                    resetSubsystems();
+                    segmentState = -1;
+                }
                 break;
         }
     }
 
-    public void HumanPlayerFar() {
+    public void LowerGPGFar() {
         switch (segmentState) {
             case 0:
-
+                follower.followPath(FarCompatible_LaunchToLowerGPG);
+                segmentState = 1;
                 break;
             case 1:
-
+                if (!follower.isBusy()) {
+                    follower.followPath(FarCompatible_IntakeLowerGPG, intakeMaxPower, true);
+                    intakeBalls();
+                    segmentState = 2;
+                }
                 break;
             case 2:
-
+                if (!follower.isBusy()) {
+                    follower.followPath(FarCompatible_LowerGPGToLaunch);
+                    premoveTurret(FarCompatible_LowerGPGToLaunch.endPose().getX(), FarCompatible_LowerGPGToLaunch.endPose().getY(), Math.toDegrees(FarCompatible_LowerGPGToLaunch.endPose().getHeading()));
+                    segmentState = 3;
+                }
                 break;
             case 3:
-
+                if (!follower.isBusy() && follower.getVelocity().getMagnitude() < 2.0) {
+                    launchBalls();
+                    segmentState = 4;
+                }
                 break;
             case 4:
-
+                if (launchTimer.seconds() > launchTime) {
+                    resetSubsystems();
+                    segmentState = -1;
+                }
                 break;
-            case 5:
+        }
+    }
 
+    public void GateFar() {
+        switch (segmentState) {
+            case 0:
+                follower.followPath(FarCompatible_LaunchToGate);
+                segmentState = 1;
+                break;
+            case 1:
+                if (!follower.isBusy()) {
+                    follower.followPath(FarCompatible_IntakeGate, intakeMaxPower, true);
+                    intakeBalls();
+                    segmentState = 2;
+                }
+                break;
+            case 2:
+                if (!follower.isBusy()) {
+                    follower.followPath(FarCompatible_GateToLaunch);
+                    premoveTurret(FarCompatible_GateToLaunch.endPose().getX(), FarCompatible_GateToLaunch.endPose().getY(), Math.toDegrees(FarCompatible_GateToLaunch.endPose().getHeading()));
+                    segmentState = 3;
+                }
+                break;
+            case 3:
+                if (!follower.isBusy() && follower.getVelocity().getMagnitude() < 2.0) {
+                    launchBalls();
+                    segmentState = 4;
+                }
+                break;
+            case 4:
+                if (launchTimer.seconds() > launchTime) {
+                    resetSubsystems();
+                    segmentState = -1;
+                }
                 break;
         }
     }
 
     public void PGPFar() {
-        switch (segmentState) {
-            case 0:
 
-                break;
-            case 1:
-
-                break;
-            case 2:
-
-                break;
-            case 3:
-
-                break;
-            case 4:
-
-                break;
-            case 5:
-
-                break;
-        }
     }
 
     public void PPGFar() {
@@ -1507,6 +1546,99 @@ public class RegionalsAuto extends LinearOpMode {
                 .setReversed()
                 .addTemporalCallback(300, preSpinLauncher)
                 .build();
-        //FarCompatible_StartToGPP = follower
+        FarCompatible_StartToGPP = follower
+                .pathBuilder()
+                .addPath(
+                        new BezierLine(
+                                new Pose(x(63), 8),
+                                new Pose(x(40), 35)
+                        )
+                )
+                .setLinearHeadingInterpolation(Math.toRadians(90), Math.toRadians(180))
+                .setReversed()
+                .build();
+        FarCompatible_IntakeGPP = follower
+                .pathBuilder()
+                .addPath(
+                        new BezierLine(
+                                new Pose(x(40), 35),
+                                new Pose(x(10), 35)
+                        )
+                )
+                .setTangentHeadingInterpolation()
+                .build();
+        FarCompatible_GPPToLaunch = follower
+                .pathBuilder()
+                .addPath(
+                    new BezierLine(
+                            new Pose(x(10), 35),
+                            new Pose(x(65), 12)
+                    )
+                )
+                .setTangentHeadingInterpolation()
+                .setReversed()
+                .build();
+        FarCompatible_LaunchToLowerGPG = follower
+                .pathBuilder()
+                .addPath(
+                        new BezierLine(
+                                new Pose(x(65), 12),
+                                new Pose(x(10), 30)
+                        )
+                )
+                .setLinearHeadingInterpolation(Math.toRadians(157), Math.toRadians(225))
+                .build();
+        FarCompatible_IntakeLowerGPG = follower
+                .pathBuilder()
+                .addPath(
+                        new BezierCurve(
+                                new Pose(x(10),30),
+                                new Pose(x(10),18),
+                                new Pose(x(6),8)
+                        )
+                )
+                .setLinearHeadingInterpolation(Math.toRadians(225),Math.toRadians(270))
+                .build();
+        FarCompatible_LowerGPGToLaunch = follower
+                .pathBuilder()
+                .addPath(
+                        new BezierLine(
+                                new Pose(x(6),8),
+                                new Pose(x(65), 12)
+                        )
+                )
+                .setLinearHeadingInterpolation(Math.toRadians(270), Math.toRadians(180))
+                .build();
+        FarCompatible_LaunchToGate = follower
+                .pathBuilder()
+                .addPath(
+                        new BezierLine(
+                                new Pose(x(65),12),
+                                new Pose(x(10),38)
+                        )
+                )
+                .setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(120))
+                .build();
+        FarCompatible_IntakeGate = follower
+                .pathBuilder()
+                .addPath(
+                        new BezierLine(
+                                new Pose(x(10),38),
+                                new Pose(x(7),60)
+                        )
+                )
+                .setLinearHeadingInterpolation(Math.toRadians(120), Math.toRadians(100))
+                .build();
+        FarCompatible_GateToLaunch = follower
+                .pathBuilder()
+                .addPath(
+                        new BezierLine(
+                                new Pose(x(7),60),
+                                new Pose(x(65),12)
+                        )
+                )
+                .setTangentHeadingInterpolation()
+                .setReversed()
+                .build();
     }
 }
