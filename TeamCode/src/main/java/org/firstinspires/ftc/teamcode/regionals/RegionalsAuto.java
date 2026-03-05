@@ -106,8 +106,8 @@ public class RegionalsAuto extends LinearOpMode {
     public static double hoodOffset = -1.5;
 
     //Blocker Variables
-    public double closedAngle = 0;
-    public double openAngle = 180;
+    public double closedAngle = 255;
+    public double openAngle = 315;
 
     //Intake Variables
     public static double intakePickupSpeed = 1.0;
@@ -118,10 +118,10 @@ public class RegionalsAuto extends LinearOpMode {
     private PIDFController turretPIDF;
     private PIDController launcherPID;
     public static double turretTolerance = 2;
-    public static double tkP = 0.0025;
+    public static double tkP = 0.0045;
     public static double tkI = 0;
-    public static double tkD = 0.00005;
-    public static double tkSCustom = 0.13;
+    public static double tkD = 0.0003;
+    public static double tkSCustom = 0.1;
     public static double errorTotal = 30;
     public double turretTargetPos;
     public double angleError;
@@ -145,7 +145,7 @@ public class RegionalsAuto extends LinearOpMode {
     //Timer
 
     AnalogInput absEncoder;
-    public static double zeroPositionOffset = -173;
+    public static double zeroPositionOffset = -186;
     double outputVoltage = 0;
     double outputAngle = 0;
     double totalRawAngle = 0;
@@ -157,15 +157,12 @@ public class RegionalsAuto extends LinearOpMode {
     double hoodCompensationAngle = 0;
 
     private final ElapsedTime autoTimer = new ElapsedTime(ElapsedTime.Resolution.SECONDS);
-    public final ElapsedTime shootTimeout = new ElapsedTime(ElapsedTime.Resolution.SECONDS);
     private final ElapsedTime waitTimer = new ElapsedTime(ElapsedTime.Resolution.SECONDS);
 
     //Panels Editable Variables
-    public static double intakeMaxPower = 1.0;
-    public static double rampMaxPower = 1;
-    public static double gateWaitTime = 1.4;
-    public static double launchTime15 = 0.4;
-    public static double gateWait15 = 1.0;
+    public static double intakeMaxPower = .7;
+    public static double rampMaxPower = .7;
+    public static double gateWaitTime = 1.2;
     public static double intakeMaxPower15 = 0.9;
     public static double rampMaxPower15 = 1.0;
     public static double farLaunchTime = .8;
@@ -181,38 +178,12 @@ public class RegionalsAuto extends LinearOpMode {
 
     //PedroPathing PathChains
     public Pose startPose;
-    public PathChain ScoreToRamp115twoC;
-    public PathChain StartToScore;
-    public PathChain ScoreToPGP18;
-    public PathChain PGPIntake18;
-    public PathChain PGPToScore18;
     public PathChain ScoreToRamp1;
     public PathChain ScoreToRamp2;
     public PathChain IntakeRamp;
-    public PathChain RampToScore1;
-    public PathChain RampToScore2;
-    public PathChain PPGIntake18;
-    public PathChain PPGToScore;
     public PathChain ScoreToGPPClose;
-    public PathChain GPPIntake18;
-    public PathChain GPPToScore18one;
-    public PathChain GPPToScore18two;
-    public PathChain Park18;
-    public PathChain startToScore15;
-    public PathChain scoreToPGP15;
-    public PathChain PGPIntake15;
     public PathChain PGPToScoreClose;
-    public PathChain ScoreToRamp115;
-    public PathChain ScoreToRamp215;
-    public PathChain IntakeRamp15;
-    public PathChain RampToScore115;
-    public PathChain RampToScore215;
-    public PathChain PPGIntake15;
-    public PathChain PPGToScore15;
-    public PathChain ScoreToGPP15;
     public PathChain GPPIntakeClose;
-    public PathChain GPPToScore15one;
-    public PathChain Park15;
     public PathChain closeStartToScore;
     public PathChain ScoreToPGPClose;
     public PathChain PGPIntakeClose;
@@ -220,13 +191,9 @@ public class RegionalsAuto extends LinearOpMode {
     public PathChain CompatibleGateScore1;
     public PathChain CompatibleGateScore2;
     public PathChain RampToScore;
-    public PathChain RampToScore215C;
     public PathChain PPGIntakeClose;
     public PathChain PPGToScoreClose;
-    public PathChain ScoreToGPP15C;
-    public PathChain GPPIntake15C;
     public PathChain GPPToScoreClose;
-    public PathChain Park15C;
 
     //Changing variables
     public int autoState = 0;
@@ -234,7 +201,7 @@ public class RegionalsAuto extends LinearOpMode {
 
 
     //Launcher Auto Variables
-    public static double launchTime = .85;
+    public static double launchTime = .55;
     public double preparedLauncherVelocity = 0;
 
     //Turret Auto Variables
@@ -300,26 +267,29 @@ public class RegionalsAuto extends LinearOpMode {
 
         launchTimer.reset();
         autoTimer.reset();
-        while (opModeIsActive()) {
+        if (opModeIsActive()) {
+            previousAngle = absEncoder.getVoltage() / 5 * 360;
+            while (opModeIsActive()) {
 
-            hubs.forEach(LynxModule::clearBulkCache); //Bulk reading
-
-
-            //Update Pedro follower and Panels
-            follower.update();
-            currentPose = follower.getPose();
-
-            if (auto == selectedAuto.Close15Compatible) Close15Compatible();
-            if (auto == selectedAuto.Close15Solo) Close15Solo();
-            if (auto == selectedAuto.Far15Compatible) Far15Compatible();
-            if (auto == selectedAuto.Far15Solo) Far15Solo();
+                hubs.forEach(LynxModule::clearBulkCache); //Bulk reading
 
 
-            teleop();
+                //Update Pedro follower and Panels
+                follower.update();
+                currentPose = follower.getPose();
 
-            telemetryUpdate();
-            telemetryM.update(telemetry);
-            endPosition = currentPose;
+                if (auto == selectedAuto.Close15Compatible) Close15Compatible();
+                if (auto == selectedAuto.Close15Solo) Close15Solo();
+                if (auto == selectedAuto.Far15Compatible) Far15Compatible();
+                if (auto == selectedAuto.Far15Solo) Far15Solo();
+
+
+                teleop();
+
+                telemetryUpdate();
+                telemetryM.update(telemetry);
+                endPosition = currentPose;
+            }
         }
         endPosition = currentPose;
     }
@@ -449,7 +419,7 @@ public class RegionalsAuto extends LinearOpMode {
         previousRawAngle = totalRawAngle;
     }
 
-//    public double calculateHoodOffset(double velocityError) {
+//    public double calculateHoodOffset(double VocityError) {
 //        return Math.abs(velocityError) * angleVelocityMultiplier;
 //    }
 
@@ -467,7 +437,7 @@ public class RegionalsAuto extends LinearOpMode {
                 hoodServo.set(hoodToServoAngle(hoodTargetAngle));
                 break;
             case "adjusting":
-                hoodTargetAngle = hoodToServoAngle(angleLUT(odoRange)) + hoodCompensationAngle;
+                hoodTargetAngle = hoodToServoAngle(angleLUT(odoRange));
                 hoodServo.set(hoodTargetAngle);
                 break;
         }
@@ -485,7 +455,8 @@ public class RegionalsAuto extends LinearOpMode {
 
     public double angleLUT(double range) {
         if (range > 20 && range < 160) return hoodLUT.get(range);
-        else return 50;
+        else if (range < 20) return hoodLUT.get(21);
+        else return hoodLUT.get(159);
     }
 
     public void sensorTeleOp() {
@@ -590,6 +561,7 @@ public class RegionalsAuto extends LinearOpMode {
                 }
                 break;
             case "preparing":
+                turretTargetPos = preparedTargetPos;
                 break;
         }
         if (!turretManualControl) turretControlLoop();
@@ -623,6 +595,7 @@ public class RegionalsAuto extends LinearOpMode {
                 break;
             case "aiming":
                 launcherSpinUp();
+                launchTimer.reset();
                 launcher.set(launcherTargetVelocity);
                 intakeState = "idle";
                 if (Math.abs(launcher.getVelocity()) > Math.abs(velocityLUT.get(launcherTargetVelocity)) - shooterSpeedGap) {
@@ -632,6 +605,7 @@ public class RegionalsAuto extends LinearOpMode {
             case "acc_ready":
                 launcherSpinUp();
                 launcher.set(launcherTargetVelocity);
+                launchTimer.reset();
                 if (Objects.equals(turretState, "aimed") && follower.getVelocity().getMagnitude() < 6 && Math.abs(follower.getAngularVelocity()) < 0.5) {
                     intakeState = "firing";
                     launcherState = "firing";
@@ -658,10 +632,7 @@ public class RegionalsAuto extends LinearOpMode {
                 launcherState = "preparing";
                 break;
             case "preparing":
-                if (launchPrepTimer.seconds() > 1) {
-                    launcherSpinUp();
-                    launcher.set(launcherTargetVelocity);
-                } else launcher.stopMotor();
+                launcher.set(preparedLauncherVelocity);
                 break;
             case "rejecting":
                 launcherTargetVelocity = -.3;
@@ -679,11 +650,11 @@ public class RegionalsAuto extends LinearOpMode {
             transferLoadSpeed = 0;
             return rangeLUT.get(159);
         } else {
-            if (70 < input && input < 90) transferLoadSpeed = 0.9 * voltageMultiplier;
-            else if (90 < input && input < 110) transferLoadSpeed = 0.8 * voltageMultiplier;
+            if (70 < input && input < 90) transferLoadSpeed = 0.85 * voltageMultiplier;
+            else if (90 < input && input < 110) transferLoadSpeed = 0.75 * voltageMultiplier;
             else if (input > 110) transferLoadSpeed = 0.7 * voltageMultiplier;
-            else transferLoadSpeed = 1;
-            if (transferLoadSpeed < 0.75) transferLoadSpeed = 0.7;
+            else transferLoadSpeed = .93;
+            if (transferLoadSpeed < 0.75) transferLoadSpeed = 0.65;
             return rangeLUT.get(input);
         }
     }
@@ -795,8 +766,8 @@ public class RegionalsAuto extends LinearOpMode {
     }
 
     public void intakeBalls() {
-        launcherState = "rejecting";
-        intakeState = "intaking";
+        //launcherState = "rejecting";
+        intakeState = "beginIntaking";
     }
 
     public void launchBalls() {
@@ -806,23 +777,8 @@ public class RegionalsAuto extends LinearOpMode {
     Runnable preSpinLauncher = new Runnable() {
         @Override
         public void run() {
-            intakeState = "readyToFire";
             launcherState = "preparing";
-            turretState = "preparing";
-        }
-    };
-
-    Runnable stopIntake = new Runnable() {
-        @Override
-        public void run() {
-            intakeState = "idle";
-        }
-    };
-
-    Runnable rejectIntake = new Runnable() {
-        @Override
-        public void run() {
-            intakeState = "rejecting";
+            turretState = "tracking";
         }
     };
 
@@ -860,7 +816,7 @@ public class RegionalsAuto extends LinearOpMode {
                 GPPClose();
                 if (segmentState == -1) {
                     segmentState = 0;
-                    autoState = 5;
+                    autoState = 6;
                 }
                 break;
             case 5:
@@ -910,7 +866,7 @@ public class RegionalsAuto extends LinearOpMode {
                 PPGClose();
                 if (segmentState == -1) {
                     segmentState = 0;
-                    autoState = 5;
+                    autoState = 6;
                 }
                 break;
             case 5:
@@ -1031,7 +987,7 @@ public class RegionalsAuto extends LinearOpMode {
             case 0:
                 follower.followPath(closeStartToScore);
                 hoodState = "adjusting";
-                premoveTurret(x(45), 92, Math.toDegrees(a(289)));
+                premoveTurret(closeStartToScore.endPose().getX(), closeStartToScore.endPose().getY(), Math.toDegrees(closeStartToScore.endPose().getHeading()));
                 segmentState = 1;
                 break;
             case 1:
@@ -1041,7 +997,7 @@ public class RegionalsAuto extends LinearOpMode {
                 }
                 break;
             case 2:
-                if (shootTimeout.seconds() > launchTime) {
+                if (launchTimer.seconds() > launchTime) {
                     resetSubsystems();
                     segmentState = -1;
                 }
@@ -1059,7 +1015,7 @@ public class RegionalsAuto extends LinearOpMode {
             case 1:
                 if (follower.atParametricEnd()) {
                     resetSubsystems();
-                    premoveTurret(x(51), 84, Math.toDegrees(a(180)));
+                    premoveTurret(PPGToScoreClose.endPose().getX(), PPGToScoreClose.endPose().getY(), Math.toDegrees(PPGToScoreClose.endPose().getHeading()));
                     follower.followPath(PPGToScoreClose);
                     segmentState = 2;
                 }
@@ -1071,7 +1027,7 @@ public class RegionalsAuto extends LinearOpMode {
                 }
                 break;
             case 3:
-                if (shootTimeout.seconds() > launchTime) {
+                if (launchTimer.seconds() > launchTime) {
                     resetSubsystems();
                     segmentState = -1;
                 }
@@ -1100,7 +1056,7 @@ public class RegionalsAuto extends LinearOpMode {
                         segmentState = 3;
                     } else {
                         follower.followPath(PGPToScoreClose);
-                        premoveTurret(x(57), 82, Math.toDegrees(a(210)));
+                        premoveTurret(PGPToScoreClose.endPose().getX(), PGPToScoreClose.endPose().getY(), Math.toDegrees(PGPToScoreClose.endPose().getHeading()));
                         segmentState = 5;
                     }
                 }
@@ -1113,7 +1069,7 @@ public class RegionalsAuto extends LinearOpMode {
                 break;
             case 4:
                 if (!follower.isBusy()) {
-                    premoveTurret(x(57), 82, Math.toDegrees(a(225)));
+                    premoveTurret(CompatibleGateScore2.endPose().getX(), CompatibleGateScore2.endPose().getY(), Math.toDegrees(CompatibleGateScore2.endPose().getHeading()));
                     follower.followPath(CompatibleGateScore2);
                     segmentState = 5;
                 }
@@ -1125,7 +1081,7 @@ public class RegionalsAuto extends LinearOpMode {
                 }
                 break;
             case 6:
-                if (shootTimeout.seconds() > launchTime) {
+                if (launchTimer.seconds() > launchTime) {
                     resetSubsystems();
                     segmentState = -1;
                 }
@@ -1142,18 +1098,19 @@ public class RegionalsAuto extends LinearOpMode {
             case 1:
                 if (follower.atParametricEnd()) {
                     follower.followPath(ScoreToRamp2, rampMaxPower, true);
+                    waitTimer.reset();
                     segmentState = 2;
                 }
                 break;
             case 2:
-                if (follower.isBusy()) {
+                if (follower.atParametricEnd() || waitTimer.seconds() > 1) {
                     waitTimer.reset();
                     intakeBalls();
                     segmentState = 3;
                 }
                 break;
             case 3:
-                if (!follower.isBusy() && waitTimer.seconds() > 0.4) {
+                if (waitTimer.seconds() > 0.6) {
                     follower.followPath(IntakeRamp);
                     segmentState = 4;
                 }
@@ -1167,7 +1124,7 @@ public class RegionalsAuto extends LinearOpMode {
             case 5:
                 if (waitTimer.seconds() > gateWaitTime || isFull) {
                     resetSubsystems();
-                    premoveTurret(x(55), 84, Math.toDegrees(a(217)));
+                    premoveTurret(RampToScore.endPose().getX(), RampToScore.endPose().getY(), Math.toDegrees(RampToScore.endPose().getHeading()));
                     follower.followPath(RampToScore);
                     segmentState = 6;
                 }
@@ -1179,7 +1136,7 @@ public class RegionalsAuto extends LinearOpMode {
                 }
                 break;
             case 7:
-                if (shootTimeout.seconds() > launchTime) {
+                if (launchTimer.seconds() > launchTime) {
                     resetSubsystems();
                     segmentState = -1;
                 }
@@ -1203,7 +1160,7 @@ public class RegionalsAuto extends LinearOpMode {
                 if (!follower.isBusy()) {
                     resetSubsystems();
                     follower.followPath(GPPToScoreClose);
-                    premoveTurret(x(59), 79, Math.toDegrees(a(228)));
+                    premoveTurret(GPPToScoreClose.endPose().getX(), GPPToScoreClose.endPose().getY(), Math.toDegrees(GPPToScoreClose.endPose().getHeading()));
                     segmentState = 3;
                 }
                 break;
@@ -1214,7 +1171,7 @@ public class RegionalsAuto extends LinearOpMode {
                 }
                 break;
             case 4:
-                if (shootTimeout.seconds() > launchTime) {
+                if (launchTimer.seconds() > launchTime) {
                     resetSubsystems();
                     segmentState = -1;
                 }
@@ -1405,9 +1362,19 @@ public class RegionalsAuto extends LinearOpMode {
         PPGIntakeClose = follower
                 .pathBuilder()
                 .addPath(
-                        new BezierLine(new Pose(x(52), 86), new Pose(x(21), 84))
+                        new BezierLine(new Pose(scorePose.getX(),84), new Pose(x(21), 84))
                 )
                 .setTangentHeadingInterpolation()
+                .build();
+
+        PPGToScoreClose = follower
+                .pathBuilder()
+                .addPath(
+                        new BezierLine(new Pose(x(21),84),scorePose)
+                )
+                .setTangentHeadingInterpolation()
+                .setReversed()
+                .addTemporalCallback(300, preSpinLauncher)
                 .build();
 
 
@@ -1442,17 +1409,18 @@ public class RegionalsAuto extends LinearOpMode {
         PGPToScoreClose = follower
                 .pathBuilder()
                 .addPath(
-                        new BezierLine(new Pose(x(19), 60), new Pose(x(57), 82))
+                        new BezierLine(new Pose(x(19), 60), scorePose)
                 )
                 .setTangentHeadingInterpolation()
                 .setReversed()
+                .addTemporalCallback(300, preSpinLauncher)
                 .build();
 
         CompatibleGateScore1 = follower
                 .pathBuilder()
                 .addPath(
                         new BezierLine(
-                                new Pose(x(17), 70),
+                                new Pose(x(17.75), 70),
                                 new Pose(x(57), 70)
                         )
                 )
@@ -1465,7 +1433,7 @@ public class RegionalsAuto extends LinearOpMode {
                 .addPath(
                         new BezierLine(
                                 new Pose(x(57), 70),
-                                new Pose(x(57), 82)
+                                scorePose
                         )
                 )
                 .setLinearHeadingInterpolation(a(180), a(225), 0.8)
@@ -1475,18 +1443,18 @@ public class RegionalsAuto extends LinearOpMode {
         ScoreToRamp1 = follower
                 .pathBuilder()
                 .addPath(
-                        new BezierLine(new Pose(x(55), 84), new Pose(x(38), 66))
+                        new BezierLine(scorePose, new Pose(x(32), 62))
                 )
                 .setLinearHeadingInterpolation(a(225), a(135), 0.8)
-                .setNoDeceleration()
+                //.setNoDeceleration()
                 .build();
 
         ScoreToRamp2 = follower
                 .pathBuilder()
                 .addPath(
                         new BezierLine(
-                                new Pose(x(32), 59.5),
-                                new Pose(x(12.5), 59.5)
+                                new Pose(x(32), 62),
+                                new Pose(x(12.5), 62)
                         )
                 )
                 .setConstantHeadingInterpolation(a(135))
@@ -1496,8 +1464,8 @@ public class RegionalsAuto extends LinearOpMode {
                 .pathBuilder()
                 .addPath(
                         new BezierLine(
-                                new Pose(x(12.5), 59.5),
-                                new Pose(x(12.5), 52)
+                                new Pose(x(12.5), 62),
+                                new Pose(x(12.5), 54)
                         )
                 )
                 .setConstantHeadingInterpolation(a(135))
@@ -1506,7 +1474,7 @@ public class RegionalsAuto extends LinearOpMode {
         RampToScore = follower
                 .pathBuilder()
                 .addPath(
-                        new BezierLine(new Pose(x(12.5), 52), new Pose(x(55), 84))
+                        new BezierLine(new Pose(x(12.5), 52), scorePose)
                 )
                 //.setConstantHeadingInterpolation(a(155))
                 .setTangentHeadingInterpolation()
@@ -1517,7 +1485,7 @@ public class RegionalsAuto extends LinearOpMode {
         ScoreToGPPClose = follower
                 .pathBuilder()
                 .addPath(
-                        new BezierLine(new Pose(x(52), 84), new Pose(x(52), 36))
+                        new BezierLine(scorePose, new Pose(x(52), 36))
                 )
                 .setConstantHeadingInterpolation(a(180))
                 .build();
@@ -1533,10 +1501,12 @@ public class RegionalsAuto extends LinearOpMode {
         GPPToScoreClose = follower
                 .pathBuilder()
                 .addPath(
-                        new BezierLine(new Pose(x(20), 36), new Pose(x(59), 79))
+                        new BezierLine(new Pose(x(20), 36), new Pose(x(60), 104))
                 )
                 .setTangentHeadingInterpolation()
                 .setReversed()
+                .addTemporalCallback(300, preSpinLauncher)
                 .build();
+        //FarCompatible_StartToGPP = follower
     }
 }

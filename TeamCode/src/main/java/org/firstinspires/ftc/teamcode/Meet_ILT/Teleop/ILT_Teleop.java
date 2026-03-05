@@ -35,6 +35,7 @@ import org.firstinspires.ftc.teamcode.Meet_ILT.Drawing;
 import org.firstinspires.ftc.teamcode.Meet_ILT.ILT_Auto;
 import org.firstinspires.ftc.teamcode.meet3.Meet3Auto;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
+import org.firstinspires.ftc.teamcode.regionals.RegionalsAuto;
 import org.firstinspires.ftc.vision.VisionPortal;
 
 import java.util.List;
@@ -106,7 +107,7 @@ public class ILT_Teleop extends LinearOpMode {
     public static double hoodOffset = -1.5;
 
     //Blocker Variables
-    public double closedAngle = 240;
+    public double closedAngle = 250;
     public double openAngle = 315;
 
     //Intake Variables
@@ -151,7 +152,7 @@ public class ILT_Teleop extends LinearOpMode {
 
     //Analog Encoder Variables
     AnalogInput absEncoder;
-    public static double zeroPositionOffset = -173;
+    public static double zeroPositionOffset = -186;
     double outputVoltage=0;
     double outputAngle=0;
     double totalRawAngle = 0;
@@ -209,8 +210,8 @@ public class ILT_Teleop extends LinearOpMode {
             }
         }
         updateTeamDependents();
-        if (ILT_Auto.endPosition.getX() != 0 && !useRealStart) {
-            startPose = ILT_Auto.endPosition;
+        if (RegionalsAuto.endPosition.getX() != 0 && !useRealStart) {
+            startPose = RegionalsAuto.endPosition;
         } else {
             try {
                 if (endPose.getX() != 0 && !useRealStart){
@@ -446,12 +447,15 @@ public class ILT_Teleop extends LinearOpMode {
         if (gamepad1.left_bumper) {
             drive.setMaxSpeed(0.7);
             turnInput *= (0.5/0.7);
+        } else if(gamepad1.left_trigger > 0.4) {
+            drive.setMaxSpeed(0.4);
+            turnInput *= 0.8;
         } else {
             if (Math.abs(driveInput) > 0.7 && Math.abs(strafeInput) < 0.3) strafeInput = 0;
             drive.setMaxSpeed(1);
         }
 
-        if (gamepad2.right_trigger > 0.4 && gamepad2.left_trigger > 0.4) {
+        if ((gamepad2.right_trigger > 0.4 && gamepad2.left_trigger > 0.4) || (gamepad1.left_trigger > 0.4 && gamepad1.right_trigger > 0.4)) {
             follower.setPose(poseResetPose);
         }
 //        if (gamepad2.right_trigger > 0.4 && gamepad2.left_trigger > 0.4) {
@@ -468,7 +472,7 @@ public class ILT_Teleop extends LinearOpMode {
             // launcherState = "testSpeed";
         } else if (gamepad2.y || gamepad1.dpad_down) {
             intakeState = "rejecting";
-            launcherState = "rejecting";
+            //launcherState = "rejecting";
         } else if (gamepad2.b || gamepad1.b) {
             intakeState = "idle";
             if (Objects.equals(launcherState,"rejecting")) {
@@ -487,6 +491,9 @@ public class ILT_Teleop extends LinearOpMode {
             turretState = "tracking";
             //launcherState = "prepare";
 //            launcherState = "preparing";
+        }
+        if (gamepad1.y) {
+            intakeState = "shortReject";
         }
 
         //Launcher Section
@@ -612,6 +619,15 @@ public class ILT_Teleop extends LinearOpMode {
                 intake.set(intakeRejectSpeed);
                 blockerServo.set(openAngle);
                 break;
+            case "shortReject":
+                intake.set(-0.6);
+                intakeTimer.reset();
+                intakeState = "shortRejecting";
+                break;
+            case "shortRejecting":
+                if (intakeTimer.seconds() > 0.15) {
+                    intake.set(1);
+                }
         }
     }
 
@@ -729,11 +745,11 @@ public class ILT_Teleop extends LinearOpMode {
             transferLoadSpeed = 0;
             return rangeLUT.get(159);
         } else {
-            if (70 < input && input < 90) transferLoadSpeed = 0.9 * voltageMultiplier;
-            else if (90 < input && input < 110) transferLoadSpeed = 0.8 * voltageMultiplier;
-            else if (input > 110) transferLoadSpeed = 0.7 * voltageMultiplier;
-            else transferLoadSpeed = 1;
-            if (transferLoadSpeed < 0.75) transferLoadSpeed = 0.7;
+            if (70 < input && input < 90) transferLoadSpeed = 0.85 * voltageMultiplier;
+            else if (90 < input && input < 110) transferLoadSpeed = 0.75 * voltageMultiplier;
+            else if (input > 110) transferLoadSpeed = 0.65 * voltageMultiplier;
+            else transferLoadSpeed = .93;
+            if (transferLoadSpeed < 0.52) transferLoadSpeed = 0.52;
             return rangeLUT.get(input);
         }
     }

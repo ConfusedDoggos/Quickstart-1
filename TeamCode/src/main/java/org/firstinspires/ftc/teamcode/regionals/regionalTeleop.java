@@ -11,6 +11,7 @@ import com.bylazar.telemetry.TelemetryManager;
 import com.bylazar.utils.LoopTimer;
 import com.pedropathing.geometry.Pose;
 import com.qualcomm.hardware.lynx.LynxModule;
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.ColorSensor;
@@ -43,6 +44,7 @@ import java.util.Objects;
 
 @TeleOp(name = "Regionals Teleop")
 @Configurable
+@Disabled
 public class regionalTeleop extends LinearOpMode {
     @IgnoreConfigurable
     static TelemetryManager telemetryM;
@@ -138,6 +140,9 @@ public class regionalTeleop extends LinearOpMode {
 
     private double voltage;
     private double voltageMultiplier;
+
+    double turret_x;
+    double turret_y;
 
     //The variable to store our instance of the vision portal.
 
@@ -674,7 +679,7 @@ public class regionalTeleop extends LinearOpMode {
         double botY = currentPose.getY();
         double goalX = goalPose.getX();
         double goalY = goalPose.getY();
-        odoRange = Math.hypot(goalX-botX,goalY-botY);
+        odoRange = Math.hypot(goalX-turret_x,goalY-turret_y);
         launcherTargetVelocity = calculateRangeLUT(odoRange);
     }
 
@@ -695,6 +700,10 @@ public class regionalTeleop extends LinearOpMode {
     public double calculateTurretAngle(double botX, double botY, double botHeading) {
         double goalX = goalPose.getX();
         double goalY = goalPose.getY();
+        //double turret_offset_y = .430688;
+        double offsetMagnitude = -1;
+        turret_x = botX + offsetMagnitude * Math.cos(Math.toRadians(botHeading));
+        turret_y = botY + offsetMagnitude * Math.sin(Math.toRadians(botHeading));
         double targetAngle = Math.toDegrees(Math.atan2(goalY-botY,goalX-botX));
         targetAngle -= botHeading + 180 + turretDriftOffset;
         telemetryM.addData("Target Angle",targetAngle);
