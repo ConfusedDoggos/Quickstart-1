@@ -972,20 +972,13 @@ public class RegionalsAuto extends LinearOpMode {
                 }
                 break;
             case 4:
-                HumanPlayerBlindFar();
+                ParkFar(follower.getPose());
                 if (segmentState == -1) {
                     segmentState = 0;
                     autoState = 5;
                 }
                 break;
             case 5:
-                ParkFar(follower.getPose());
-                if (segmentState == -1) {
-                    segmentState = 0;
-                    autoState = 6;
-                }
-                break;
-            case 6:
                 resetSubsystems();
                 break;
         }
@@ -1216,22 +1209,19 @@ public class RegionalsAuto extends LinearOpMode {
     public void PreLoadFar() {
         switch (segmentState) {
             case 0:
-
+                hoodState = "adjusting";
+                premoveTurret(currentPose.getX(), currentPose.getY(), Math.toDegrees(currentPose.getHeading()));
+                segmentState = 1;
                 break;
             case 1:
-
+                launchBalls();
+                segmentState = 2;
                 break;
             case 2:
-
-                break;
-            case 3:
-
-                break;
-            case 4:
-
-                break;
-            case 5:
-
+                if (launchTimer.seconds() > launchTime) {
+                    resetSubsystems();
+                    segmentState = -1;
+                }
                 break;
         }
     }
