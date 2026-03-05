@@ -33,11 +33,8 @@ import com.seattlesolvers.solverslib.util.InterpLUT;
 import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
 import org.firstinspires.ftc.teamcode.meet3.Meet3Auto;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
-import org.firstinspires.ftc.teamcode.regionals.StateMachine;
-import org.firstinspires.ftc.vision.VisionPortal;
-import org.firstinspires.ftc.vision.apriltag.AprilTagProcessor;
+import org.firstinspires.ftc.teamcode.prototyping.StateMachine;
 
-import java.io.FileNotFoundException;
 import java.util.List;
 import java.util.Objects;
 
