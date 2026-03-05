@@ -915,7 +915,7 @@ public class RegionalsAuto extends LinearOpMode {
                 }
                 break;
             case 3:
-                HumanPlayerFar();
+                LowerGPGFar();
                 if (segmentState == -1) {
                     segmentState = 0;
                     autoState = 4;
@@ -958,14 +958,14 @@ public class RegionalsAuto extends LinearOpMode {
                 }
                 break;
             case 2:
-                HumanPlayerFar();
+                LowerGPGFar();
                 if (segmentState == -1) {
                     segmentState = 0;
                     autoState = 3;
                 }
                 break;
             case 3:
-                HumanPlayerBlindFar();
+                GateFar();
                 if (segmentState == -1) {
                     segmentState = 0;
                     autoState = 4;
@@ -1271,50 +1271,78 @@ public class RegionalsAuto extends LinearOpMode {
         }
     }
 
-    public void HumanPlayerFar() {
+    public void LowerGPGFar() {
         switch (segmentState) {
             case 0:
-
+                follower.followPath(FarCompatible_LaunchToLowerGPG);
+                segmentState = 1;
                 break;
             case 1:
-
+                if (!follower.isBusy()) {
+                    follower.followPath(FarCompatible_IntakeLowerGPG, intakeMaxPower, true);
+                    intakeBalls();
+                    segmentState = 2;
+                }
                 break;
             case 2:
-
+                if (!follower.isBusy()) {
+                    follower.followPath(FarCompatible_LowerGPGToLaunch);
+                    premoveTurret(FarCompatible_LowerGPGToLaunch.endPose().getX(), FarCompatible_LowerGPGToLaunch.endPose().getY(), Math.toDegrees(FarCompatible_LowerGPGToLaunch.endPose().getHeading()));
+                    segmentState = 3;
+                }
                 break;
             case 3:
-
+                if (!follower.isBusy() && follower.getVelocity().getMagnitude() < 2.0) {
+                    launchBalls();
+                    segmentState = 4;
+                }
                 break;
             case 4:
-
+                if (launchTimer.seconds() > launchTime) {
+                    resetSubsystems();
+                    segmentState = -1;
+                }
                 break;
-            case 5:
+        }
+    }
 
+    public void GateFar() {
+        switch (segmentState) {
+            case 0:
+                follower.followPath(FarCompatible_LaunchToGate);
+                segmentState = 1;
+                break;
+            case 1:
+                if (!follower.isBusy()) {
+                    follower.followPath(FarCompatible_IntakeGate, intakeMaxPower, true);
+                    intakeBalls();
+                    segmentState = 2;
+                }
+                break;
+            case 2:
+                if (!follower.isBusy()) {
+                    follower.followPath(FarCompatible_GateToLaunch);
+                    premoveTurret(FarCompatible_GateToLaunch.endPose().getX(), FarCompatible_GateToLaunch.endPose().getY(), Math.toDegrees(FarCompatible_GateToLaunch.endPose().getHeading()));
+                    segmentState = 3;
+                }
+                break;
+            case 3:
+                if (!follower.isBusy() && follower.getVelocity().getMagnitude() < 2.0) {
+                    launchBalls();
+                    segmentState = 4;
+                }
+                break;
+            case 4:
+                if (launchTimer.seconds() > launchTime) {
+                    resetSubsystems();
+                    segmentState = -1;
+                }
                 break;
         }
     }
 
     public void PGPFar() {
-        switch (segmentState) {
-            case 0:
 
-                break;
-            case 1:
-
-                break;
-            case 2:
-
-                break;
-            case 3:
-
-                break;
-            case 4:
-
-                break;
-            case 5:
-
-                break;
-        }
     }
 
     public void PPGFar() {
